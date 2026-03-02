@@ -3,7 +3,7 @@ import React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import DashboardSidebar from "@/components/DashboardSidebar";
-import DashboardNavbar from "@/components/DashboardNavbar";
+// Removed DashboardNavbar to achieve cleaner SaaS look
 import { useAuth } from "@/components/AuthProvider";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
@@ -13,24 +13,21 @@ const mobileNavLinks = [
     { name: "Home", href: "/dashboard", icon: LayoutDashboard },
     { name: "Sessions", href: "/dashboard/sessions", icon: MessageCircle },
     { name: "Campaigns", href: "/dashboard/campaigns", icon: Send },
+    { name: "AI", href: "/dashboard/ai", icon: Settings },
     { name: "Profile", href: "/dashboard/profile", icon: User },
 ];
 
 function MobileBottomNav() {
     const pathname = usePathname();
-    const handleLogout = async () => {
-        await signOut(auth);
-        window.location.href = "/login";
-    };
 
     // Hide bottom nav entirely on the admin chat page for full-screen mobile experience
-    if (pathname === '/dashboard/admin') {
+    if (pathname === '/dashboard/ai') {
         return null;
     }
 
     return (
-        <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-white/80 backdrop-blur-xl border-t border-slate-200 pb-safe">
-            <div className="flex items-center justify-around h-16 px-2 max-w-lg mx-auto">
+        <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-white/90 backdrop-blur-2xl border-t border-slate-200/50 pb-safe shadow-[0_-4px_24px_rgba(0,0,0,0.02)]">
+            <div className="flex items-center justify-around h-[68px] px-1 max-w-md mx-auto">
                 {mobileNavLinks.map((link) => {
                     const isActive = pathname === link.href;
                     const Icon = link.icon;
@@ -38,28 +35,15 @@ function MobileBottomNav() {
                         <Link
                             key={link.href}
                             href={link.href}
-                            className={`relative flex flex-col items-center justify-center gap-1 flex-1 h-full rounded-2xl transition-all duration-200 ${isActive ? 'text-blue-600' : 'text-slate-400 active:scale-90'
+                            className={`relative flex flex-col items-center justify-center gap-1 flex-1 h-full rounded-2xl transition-all duration-300 ${isActive ? 'text-blue-600 scale-105' : 'text-slate-400 active:scale-95'
                                 }`}
                         >
-                            {isActive && (
-                                <span className="absolute top-2 w-8 h-8 rounded-xl bg-blue-50 -z-10" />
-                            )}
-                            <Icon className={`w-5 h-5 transition-transform duration-200 ${isActive ? 'scale-110' : ''}`} />
-                            <span className={`text-[10px] font-semibold tracking-tight ${isActive ? 'text-blue-600' : 'text-slate-400'
+                            <Icon className={`w-5 h-5 transition-transform duration-300 ${isActive ? 'fill-blue-100/50 stroke-blue-600' : ''}`} />
+                            <span className={`text-[9px] font-bold tracking-tight ${isActive ? 'text-blue-600' : 'text-slate-500'
                                 }`}>{link.name}</span>
-                            {isActive && (
-                                <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-4 h-0.5 rounded-full bg-blue-600" />
-                            )}
                         </Link>
                     );
                 })}
-                <button
-                    onClick={handleLogout}
-                    className="relative flex flex-col items-center justify-center gap-1 flex-1 h-full rounded-2xl text-slate-400 active:scale-90 transition-all"
-                >
-                    <LogOut className="w-5 h-5" />
-                    <span className="text-[10px] font-semibold tracking-tight">Logout</span>
-                </button>
             </div>
         </nav>
     );
@@ -84,7 +68,7 @@ export default function DashboardLayout({
         return null;
     }
 
-    const isAdminRoute = pathname === '/dashboard/admin';
+    const isAdminRoute = pathname === '/dashboard/ai';
 
     // Remove max-w restriction and padding if it's the admin chat route for maximum space
     const mainClasses = isAdminRoute
@@ -98,11 +82,10 @@ export default function DashboardLayout({
     return (
         <div className="flex h-screen bg-[#F9FAFB] overflow-hidden">
             <DashboardSidebar />
-            <div className="flex flex-col flex-1 min-w-0 h-full">
-                {!isAdminRoute && <DashboardNavbar />}
+            <div className="flex flex-col flex-1 min-w-0 h-full bg-slate-50">
                 <main className={mainClasses}>
                     {!isAdminRoute && (
-                        <div className="absolute top-0 right-0 -z-10 w-[600px] h-[600px] bg-blue-50 rounded-full blur-3xl opacity-50 translate-x-1/2 -translate-y-1/2 pointer-events-none" />
+                        <div className="absolute top-0 right-0 -z-10 w-[800px] h-[800px] bg-gradient-to-bl from-blue-100/40 via-purple-50/20 to-transparent rounded-full blur-3xl opacity-60 translate-x-1/2 -translate-y-1/2 pointer-events-none" />
                     )}
                     <div className={containerClasses}>
                         {children}

@@ -1,12 +1,22 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+@theme {
+  --color-primary: #0e7490;
+  --color-accent-teal: #14b8a6;
+  --color-accent-purple: #a855f7;
+  --color-accent-pink: #ec4899;
+  --color-accent-orange: #f97316;
+  --color-accent-blue: #3b82f6;
+
+  --shadow-soft: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+  --shadow-glow: 0 0 15px rgba(14, 116, 144, 0.3);
+}
+
 @layer base {
   :root {
     --background: #ffffff;
     --foreground: #0f172a;
-    --primary: #2563eb;
-    --primary-foreground: #ffffff;
   }
 }
 
@@ -15,12 +25,15 @@ body {
   color: var(--foreground);
 }
 
-.glass-panel {
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(226, 232, 240, 0.8);
-  box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.08);
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.page-bg {
+  background: linear-gradient(135deg, #e0f7fa 0%, #e8eaf6 50%, #f3e5f5 100%);
 }
 
 /* Safe area padding for modern phones with home indicators (iPhone etc.) */

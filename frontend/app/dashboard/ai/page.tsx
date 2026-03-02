@@ -286,8 +286,9 @@ export default function NeuralAdminPage() {
             setMessages(updatedMsgs);
             saveStateToLocal(activeSessionId, updatedMsgs, "New Chat");
 
-        } catch (err) {
-            const failMsgs = [...newMsgs, { role: 'ai', text: "❌ Connection to Neural Core failed." } as Message];
+        } catch (err: any) {
+            const errorMsg = err?.message || "Connection to Neural Core failed.";
+            const failMsgs = [...newMsgs, { role: 'ai', text: `❌ ${errorMsg}` } as Message];
             setMessages(failMsgs);
             saveStateToLocal(activeSessionId, failMsgs, "New Chat");
         } finally {

@@ -116,13 +116,13 @@ RULES:
         });
 
         // Convert history format if provided
-        const formattedHistory = (history || []).map(msg => ({
+        const formattedHistory: any[] = (history || []).map((msg: any) => ({
             role: msg.role === 'ai' ? 'model' : 'user',
             parts: [{ text: msg.text || '' }]
         }));
 
         // Build current content parts
-        const currentParts: Part[] = [{ text: query || 'Please analyze the attached file.' }];
+        const currentParts: any[] = [{ text: query || 'Please analyze the attached file.' }];
 
         if (file) {
             currentParts.push({

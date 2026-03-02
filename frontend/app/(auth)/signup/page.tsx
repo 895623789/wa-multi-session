@@ -93,8 +93,14 @@ export default function SignupPage() {
                     createdAt: serverTimestamp(),
                     updatedAt: serverTimestamp()
                 });
+                window.location.href = "/onboarding";
+            } else {
+                if (userDoc.data()?.onboardingComplete) {
+                    window.location.href = "/dashboard";
+                } else {
+                    window.location.href = "/onboarding";
+                }
             }
-            window.location.href = "/onboarding";
         } catch (err: any) {
             console.error(err);
             setError(firebaseError(err.code));
