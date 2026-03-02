@@ -22,6 +22,12 @@ function MobileBottomNav() {
         await signOut(auth);
         window.location.href = "/login";
     };
+
+    // Hide bottom nav entirely on the admin chat page for full-screen mobile experience
+    if (pathname === '/dashboard/admin') {
+        return null;
+    }
+
     return (
         <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-white/80 backdrop-blur-xl border-t border-slate-200 pb-safe">
             <div className="flex items-center justify-around h-16 px-2 max-w-lg mx-auto">
@@ -66,6 +72,7 @@ export default function DashboardLayout({
 }) {
     const { user, userData, loading } = useAuth();
     const router = useRouter();
+    const pathname = usePathname();
 
     // Auth guard
     if (!loading && !user) {
@@ -77,15 +84,27 @@ export default function DashboardLayout({
         return null;
     }
 
+    const isAdminRoute = pathname === '/dashboard/admin';
+
+    // Remove max-w restriction and padding if it's the admin chat route for maximum space
+    const mainClasses = isAdminRoute
+        ? "flex-1 overflow-hidden relative"
+        : "flex-1 overflow-auto p-4 sm:p-8 relative pb-20 md:pb-8";
+
+    const containerClasses = isAdminRoute
+        ? "w-full h-full"
+        : "max-w-7xl mx-auto w-full";
+
     return (
         <div className="flex h-screen bg-[#F9FAFB] overflow-hidden">
             <DashboardSidebar />
-            <div className="flex flex-col flex-1 min-w-0">
-                <DashboardNavbar />
-                <main className="flex-1 overflow-auto p-4 sm:p-8 relative pb-20 md:pb-8">
-                    {/* Subtle noise/gradient background */}
-                    <div className="absolute top-0 right-0 -z-10 w-[600px] h-[600px] bg-blue-50 rounded-full blur-3xl opacity-50 translate-x-1/2 -translate-y-1/2 pointer-events-none" />
-                    <div className="max-w-7xl mx-auto w-full">
+            <div className="flex flex-col flex-1 min-w-0 h-full">
+                {!isAdminRoute && <DashboardNavbar />}
+                <main className={mainClasses}>
+                    {!isAdminRoute && (
+                        <div className="absolute top-0 right-0 -z-10 w-[600px] h-[600px] bg-blue-50 rounded-full blur-3xl opacity-50 translate-x-1/2 -translate-y-1/2 pointer-events-none" />
+                    )}
+                    <div className={containerClasses}>
                         {children}
                     </div>
                 </main>
