@@ -34,8 +34,8 @@ export async function generateAdminReply(query: string, stats: SystemStats): Pro
 
         const result = await model.generateContent(query);
         return result.response.text() || "I'm sorry, I couldn't process that query.";
-    } catch (error) {
+    } catch (error: any) {
         console.error("Admin AI Error:", error);
-        return "I encountered an error while accessing system metrics. Please try again later.";
+        return `API Error: ${error.message || JSON.stringify(error)}`;
     }
 }
