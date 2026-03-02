@@ -22,3 +22,8 @@ body {
   border: 1px solid rgba(226, 232, 240, 0.8);
   box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.08);
 }
+
+/* Safe area padding for modern phones with home indicators (iPhone etc.) */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}

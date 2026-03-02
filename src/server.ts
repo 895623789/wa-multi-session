@@ -1,10 +1,14 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
+import multer from "multer";
 import { Whatsapp, FirebaseAdapter } from "./index";
 import { generateAutoReply, generateOutreach } from "./Services/AIHandler";
 import { generateAdminReply } from "./Services/AdminHandler";
 import { MessageQueue } from "./Services/MessageQueue";
+
+// Multer: store uploads in memory (no disk, no Firebase by default)
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 dotenv.config();
 
@@ -18,6 +22,10 @@ app.use(express.static("public"));
 // Store session status in memory for the frontend test page
 const sessionStatuses = new Map<string, { status: string, qr?: string }>();
 
+// Guard: Track phone numbers to prevent duplicate connections
+// Key: phone number (cleaned), Value: sessionId that owns it
+const phoneToSessionGuard = new Map<string, string>();
+
 // Initialize the WhatsApp engine with Firebase adapter
 const whatsapp = new Whatsapp({
   adapter: new FirebaseAdapter(),
@@ -25,12 +33,62 @@ const whatsapp = new Whatsapp({
     console.log(`[${sessionId}] Connecting...`);
     sessionStatuses.set(sessionId, { status: 'connecting' });
   },
-  onConnected: (sessionId) => {
+  onConnected: async (sessionId) => {
     console.log(`[${sessionId}] Connected`);
+
+    // --- DUPLICATE PHONE NUMBER GUARD ---
+    try {
+      const session = await whatsapp.getSessionById(sessionId);
+      const phoneNumber = session?.sock?.user?.id?.split(':')[0] || session?.sock?.user?.id?.split('@')[0];
+
+      if (phoneNumber) {
+        const existingOwner = phoneToSessionGuard.get(phoneNumber);
+        if (existingOwner && existingOwner !== sessionId) {
+          // This phone number is ALREADY connected under a different session!
+          console.warn(`🚫 Duplicate phone detected! ${phoneNumber} is already in session '${existingOwner}'. Rejecting '${sessionId}'...`);
+          sessionStatuses.set(sessionId, {
+            status: 'duplicate_rejected',
+            qr: undefined
+          });
+
+          // 🔥 IMMEDIATELY wipe Firebase credentials so this session won't reload on server restart
+          try {
+            await session?.store?.clearCreds();
+            console.log(`🗑️ Firebase credentials cleared for duplicate session '${sessionId}'`);
+          } catch (cleanErr) {
+            console.error(`Failed to clear Firebase creds for '${sessionId}':`, cleanErr);
+          }
+
+          // After a delay, end the socket cleanly so frontend polling can detect status
+          setTimeout(async () => {
+            try {
+              session?.sock?.end(undefined);
+            } catch (_) { }
+            sessionStatuses.delete(sessionId);
+          }, 6000);
+          return;
+        }
+        // Register this phone with this session as its rightful owner
+        phoneToSessionGuard.set(phoneNumber, sessionId);
+        console.log(`📱 Phone ${phoneNumber} registered to session '${sessionId}'`);
+      }
+    } catch (err) {
+      console.error(`Guard check failed for session ${sessionId}:`, err);
+    }
+    // --- END GUARD ---
+
     sessionStatuses.set(sessionId, { status: 'connected', qr: undefined });
   },
   onDisconnected: (sessionId) => {
     console.log(`[${sessionId}] Disconnected`);
+    // Clean up phone guard when a session disconnects
+    for (const [phone, sid] of phoneToSessionGuard.entries()) {
+      if (sid === sessionId) {
+        phoneToSessionGuard.delete(phone);
+        console.log(`🗑️ Phone guard cleared for session '${sessionId}'`);
+        break;
+      }
+    }
     sessionStatuses.set(sessionId, { status: 'disconnected', qr: undefined });
   },
   onMessageReceived: async (msg) => {
@@ -162,9 +220,16 @@ app.post("/session/start", async (req, res) => {
 
   try {
     const existing = await whatsapp.getSessionById(sessionId);
-    if (existing && existing.status === 'connected') {
-      sessionStatuses.set(sessionId, { status: 'connected' });
-      return res.json({ message: `Session ${sessionId} is already active.` });
+    if (existing) {
+      if (existing.status === 'connected') {
+        sessionStatuses.set(sessionId, { status: 'connected' });
+        return res.json({ message: `Session ${sessionId} is already active.` });
+      } else {
+        // Session exists but is NOT connected (stuck, rejected etc.) — force delete and restart fresh
+        console.log(`♻️ Cleaning up stale/rejected session '${sessionId}' before restart...`);
+        await whatsapp.deleteSession(sessionId);
+        sessionStatuses.delete(sessionId);
+      }
     }
 
     await whatsapp.startSession(sessionId, {
@@ -182,6 +247,41 @@ app.post("/session/start", async (req, res) => {
     if (error.message.includes('already exist')) {
       return res.json({ message: `Session ${sessionId} is resuming...` });
     }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Disconnect and permanently delete a WhatsApp session
+ * DELETE http://localhost:5000/session/delete/:sessionId
+ */
+app.delete("/session/delete/:sessionId", async (req, res) => {
+  const { sessionId } = req.params;
+  if (!sessionId) return res.status(400).json({ error: "sessionId is required" });
+
+  try {
+    const session = await whatsapp.getSessionById(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: `Session '${sessionId}' not found.` });
+    }
+
+    console.log(`🔴 Disconnecting session '${sessionId}'...`);
+
+    // Remove from phone guard
+    for (const [phone, sid] of phoneToSessionGuard.entries()) {
+      if (sid === sessionId) {
+        phoneToSessionGuard.delete(phone);
+        break;
+      }
+    }
+
+    // Delete session (clears Firebase creds + ends socket)
+    await whatsapp.deleteSession(sessionId);
+    sessionStatuses.delete(sessionId);
+
+    console.log(`✅ Session '${sessionId}' successfully disconnected and deleted.`);
+    res.json({ message: `Session '${sessionId}' has been disconnected.` });
+  } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
@@ -272,21 +372,57 @@ app.post("/campaign/start", async (req, res) => {
  * POST http://localhost:3000/admin/chat
  * Body: { "query": "How many messages sent?", "sessionId": "my-user-1" }
  */
-app.post("/admin/chat", async (req, res) => {
-  const { query, sessionId } = req.body;
+app.post("/admin/chat", upload.single('file'), async (req: any, res) => {
+  const query = req.body?.query || '';
 
   try {
     const sessions = await whatsapp.getSessionsIds();
     const queueStats = await queue.getStats();
-    const ownerNumber = await (whatsapp as any).adapter.readData(sessionId, 'ownerNumber');
 
-    const reply = await generateAdminReply(query, {
-      activeSessions: sessions,
-      pendingMessages: queueStats.pending,
-      sentMessages: queueStats.sent
-    });
+    // Build optional file attachment
+    let fileAttachment;
+    if (req.file) {
+      fileAttachment = {
+        buffer: req.file.buffer,
+        mimeType: req.file.mimetype,
+        originalName: req.file.originalname
+      };
+    }
 
-    res.json({ reply });
+    // WhatsApp send function for AI function calling
+    const sendWhatsappFn = async (sessionId: string, to: string, message: string) => {
+      await whatsapp.sendText(sessionId, to, message);
+    };
+
+    const agentReply = await generateAdminReply(
+      query,
+      { activeSessions: sessions, pendingMessages: queueStats.pending, sentMessages: queueStats.sent },
+      fileAttachment,
+      sendWhatsappFn
+    );
+
+    res.json(agentReply);
+  } catch (error: any) {
+    res.status(500).json({ text: `Error: ${error.message}`, error: error.message });
+  }
+});
+
+/**
+ * Optional: Save a file to Firebase Storage
+ * POST /admin/upload-to-storage
+ */
+app.post("/admin/upload-to-storage", upload.single('file'), async (req: any, res) => {
+  if (!req.file) return res.status(400).json({ error: "No file provided" });
+  try {
+    const { getStorage } = await import('firebase-admin/storage');
+    const storage = getStorage();
+    const bucket = storage.bucket();
+    const fileName = `admin-uploads/${Date.now()}-${req.file.originalname}`;
+    const fileRef = bucket.file(fileName);
+    await fileRef.save(req.file.buffer, { metadata: { contentType: req.file.mimetype } });
+    await fileRef.makePublic();
+    const publicUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`;
+    res.json({ url: publicUrl, fileName });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
