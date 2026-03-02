@@ -20,6 +20,7 @@
     "@google/generative-ai": "^0.24.1",
     "@hapi/boom": "^10.0.1",
     "baileys": "7.0.0-rc.6",
+    "cors": "^2.8.6",
     "dotenv": "^17.3.1",
     "firebase-admin": "^13.7.0",
     "link-preview-js": "^3.0.14",
@@ -34,6 +35,7 @@
     "url": "git+ssh://git@github.com/mimamch/wa-multi-session.git"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/mime": "^3.0.1",
     "@types/node": "^25.3.3",

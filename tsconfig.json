@@ -3,7 +3,8 @@
     "src/test/*",
     "dist/*",
     "list-models.ts",
-    "test-gemini.mjs"
+    "test-gemini.mjs",
+    "frontend"
   ],
   "compilerOptions": {
     /* Visit https://aka.ms/tsconfig to read more about this file */

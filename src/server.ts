@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import { Whatsapp, FirebaseAdapter } from "./index";
 import { generateAutoReply, generateOutreach } from "./Services/AIHandler";
 import { generateAdminReply } from "./Services/AdminHandler";
@@ -7,6 +8,7 @@ import { MessageQueue } from "./Services/MessageQueue";
 const app = express();
 const port = 3000;
 
+app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
 
