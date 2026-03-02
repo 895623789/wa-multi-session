@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { Link2, QrCode, RefreshCw, XCircle } from "lucide-react";
 import Image from "next/image";
+import QRCode from "react-qr-code";
 
 export default function SessionsPage() {
     const [sessions, setSessions] = useState<string[]>([]);
@@ -171,10 +172,10 @@ export default function SessionsPage() {
                         <div className="mt-6 p-4 bg-slate-50 border border-slate-200 rounded-xl flex flex-col items-center justify-center animate-in fade-in zoom-in slide-in-from-bottom-2 duration-300">
                             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4">Scan using WhatsApp</p>
                             <div className="bg-white p-2 rounded-xl shadow-sm border border-slate-200 relative w-48 h-48 flex items-center justify-center">
-                                <img
-                                    src={qrCode.startsWith('data:image') ? qrCode : `data:image/png;base64,${qrCode}`}
-                                    alt="WhatsApp Login QR Code"
-                                    className="w-full h-full object-contain rounded-lg"
+                                <QRCode
+                                    value={qrCode}
+                                    size={192}
+                                    style={{ height: "auto", maxWidth: "100%", width: "100%" }}
                                 />
                             </div>
                             <div className="mt-4 text-xs font-medium text-slate-400 flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-full border border-slate-200 shadow-sm">
