@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useRef, useEffect } from "react";
 import { BrainCircuit, Send, User, Sparkles } from "lucide-react";
+import ReactMarkdown from 'react-markdown';
 
 export default function NeuralAdminPage() {
     const [messages, setMessages] = useState<{ role: 'user' | 'ai', text: string }[]>([
@@ -68,11 +69,15 @@ export default function NeuralAdminPage() {
                             {msg.role === 'user' ? <User className="w-4 h-4 text-white" /> : <Sparkles className="w-4 h-4 text-amber-600" />}
                         </div>
 
-                        <div className={`p-4 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${msg.role === 'user'
-                                ? 'bg-blue-600 text-white rounded-tr-sm shadow-md'
-                                : 'bg-slate-50 border border-slate-100 text-slate-700 rounded-tl-sm'
+                        <div className={`p-4 rounded-2xl text-sm leading-relaxed ${msg.role === 'user'
+                            ? 'bg-blue-600 text-white rounded-tr-sm shadow-md whitespace-pre-wrap'
+                            : 'bg-slate-50 border border-slate-100 text-slate-700 rounded-tl-sm prose prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1'
                             }`}>
-                            {msg.text}
+                            {msg.role === 'ai' ? (
+                                <ReactMarkdown>{msg.text}</ReactMarkdown>
+                            ) : (
+                                msg.text
+                            )}
                         </div>
 
                     </div>
