@@ -161,6 +161,12 @@ export class Whatsapp {
     if (await this.isSessionExistAndRunning(sessionId))
       throw new WhatsappError(Messages.sessionAlreadyExist(sessionId));
 
+    // Save Owner Number if provided
+    if (options.ownerNumber) {
+      console.log(`📡 Saving Owner Number ${options.ownerNumber} for session ${sessionId}`);
+      await this.adapter.writeData(sessionId, 'ownerNumber', 'config', options.ownerNumber);
+    }
+
     const { version } = await fetchLatestBaileysVersion();
     const startSocket = async () => {
       const store = await this.getStore(sessionId);
@@ -292,6 +298,13 @@ export class Whatsapp {
     );
     if (await this.isSessionExistAndRunning(sessionId))
       throw new WhatsappError(Messages.sessionAlreadyExist(sessionId));
+
+    // Save Owner Number if provided
+    const ownerNumber = (options as any).ownerNumber;
+    if (ownerNumber) {
+      console.log(`📡 Saving Owner Number ${ownerNumber} for session ${sessionId}`);
+      await this.adapter.writeData(sessionId, 'ownerNumber', 'config', ownerNumber);
+    }
 
     const { version } = await fetchLatestBaileysVersion();
     const startSocket = async () => {
@@ -432,9 +445,9 @@ export class Whatsapp {
   async deleteSession(sessionId: string) {
     const session = await this.getSessionById(sessionId);
     try {
-      await session?.sock.logout().catch(() => {});
-      await session?.store.clearCreds().catch(() => {});
-    } catch (error) {}
+      await session?.sock.logout().catch(() => { });
+      await session?.store.clearCreds().catch(() => { });
+    } catch (error) { }
     session?.sock.end(undefined);
     this.sessions.delete(sessionId);
   }
@@ -540,8 +553,8 @@ export class Whatsapp {
         image:
           typeof props.media == "string"
             ? {
-                url: props.media,
-              }
+              url: props.media,
+            }
             : props.media,
         caption: props.text,
       },
@@ -564,8 +577,8 @@ export class Whatsapp {
         video:
           typeof props.media == "string"
             ? {
-                url: props.media,
-              }
+              url: props.media,
+            }
             : props.media,
         caption: props.text,
       },
@@ -598,8 +611,8 @@ export class Whatsapp {
         document:
           typeof props.media == "string"
             ? {
-                url: props.media,
-              }
+              url: props.media,
+            }
             : props.media,
         mimetype: mimetype,
         caption: props.text,
@@ -631,8 +644,8 @@ export class Whatsapp {
         audio:
           typeof props.media == "string"
             ? {
-                url: props.media,
-              }
+              url: props.media,
+            }
             : props.media,
         ptt: props.asVoiceNote ?? false,
       },
@@ -659,8 +672,8 @@ export class Whatsapp {
         sticker:
           typeof props.media == "string"
             ? {
-                url: props.media,
-              }
+              url: props.media,
+            }
             : props.media,
       },
       {

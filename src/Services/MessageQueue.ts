@@ -1,0 +1,130 @@
+import { Firestore, getFirestore } from "firebase-admin/firestore";
+import { Whatsapp } from "../Whatsapp/Whatsapp";
+
+const COLLECTION = "message_queue";
+
+export interface QueueTask {
+    id?: string;
+    sessionId: string;
+    to: string;
+    text: string;
+    status: "pending" | "processing" | "sent" | "failed";
+    createdAt: Date;
+    error?: string;
+}
+
+export class MessageQueue {
+    private db: Firestore;
+    private whatsapp: Whatsapp;
+    private isRunning: boolean = false;
+
+    constructor(whatsapp: Whatsapp) {
+        this.db = getFirestore();
+        this.whatsapp = whatsapp;
+    }
+
+    /**
+     * Pushes a new message into the Firestore queue
+     */
+    async push(sessionId: string, to: string, text: string) {
+        const task: QueueTask = {
+            sessionId,
+            to,
+            text,
+            status: "pending",
+            createdAt: new Date(),
+        };
+        return await this.db.collection(COLLECTION).add(task);
+    }
+
+    /**
+     * Starts the global worker loop
+     */
+    async startWorker() {
+        if (this.isRunning) return;
+        this.isRunning = true;
+        console.log("🛡️ Anti-Ban Queue Worker Started");
+
+        while (this.isRunning) {
+            try {
+                // Get one pending message (simplified query to avoid index requirement)
+                const snapshot = await this.db.collection(COLLECTION)
+                    .where("status", "==", "pending")
+                    .limit(1)
+                    .get();
+
+                if (snapshot.empty) {
+                    // No messages to process, wait 3 seconds
+                    await new Promise(resolve => setTimeout(resolve, 3000));
+                    continue;
+                }
+
+                const doc = snapshot.docs[0];
+                const task = { id: doc.id, ...doc.data() } as QueueTask;
+
+                await this.processTask(task);
+
+            } catch (error) {
+                console.error("Queue Worker Error:", error);
+                await new Promise(resolve => setTimeout(resolve, 5000));
+            }
+        }
+    }
+
+    private async processTask(task: QueueTask) {
+        const docRef = this.db.collection(COLLECTION).doc(task.id!);
+
+        try {
+            // 1. Mark as processing
+            await docRef.update({ status: "processing" });
+
+            // 2. Check if session is connected
+            const session = await this.whatsapp.getSessionById(task.sessionId);
+            if (!session || session.status !== 'connected') {
+                throw new Error(`Session ${task.sessionId} not connected`);
+            }
+
+            // 3. Mimic human behavior with randomized delay (5-10 seconds)
+            const delay = Math.floor(Math.random() * (10000 - 5000 + 1)) + 5000;
+            console.log(`⏳ Queue: Waiting ${delay / 1000}s before sending to ${task.to}...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+
+            // 4. Send Message
+            await this.whatsapp.sendText({
+                sessionId: task.sessionId,
+                to: task.to,
+                text: task.text
+            });
+
+            // 5. Success
+            await docRef.update({ status: "sent" });
+            console.log(`✅ Queue: Sent message to ${task.to}`);
+
+        } catch (error: any) {
+            console.error(`❌ Queue Error [${task.id}]:`, error.message);
+            await docRef.update({
+                status: "failed",
+                error: error.message
+            });
+        }
+    }
+
+    /**
+     * Retrieves current queue statistics
+     */
+    async getStats() {
+        const pending = await this.db.collection(COLLECTION).where("status", "==", "pending").count().get();
+        const sent = await this.db.collection(COLLECTION).where("status", "==", "sent").count().get();
+        const failed = await this.db.collection(COLLECTION).where("status", "==", "failed").count().get();
+
+        return {
+            pending: pending.data().count,
+            sent: sent.data().count,
+            failed: failed.data().count
+        };
+    }
+
+    stopWorker() {
+        this.isRunning = false;
+    }
+}

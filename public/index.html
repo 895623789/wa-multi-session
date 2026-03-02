@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BulkReply.io | AI Power Portal</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      background: #0a0a0f;
+      font-family: 'Outfit', sans-serif;
+      color: white;
+      overflow-x: hidden;
+    }
+
+    .glass {
+      background: rgba(255, 255, 255, 0.03);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+      transition: all 0.3s ease;
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .nav-link {
+      transition: all 0.3s ease;
+    }
+
+    .nav-link.active {
+      background: rgba(255, 255, 255, 0.05);
+      border-right: 3px solid #4facfe;
+    }
+
+    .chat-bubble-ai {
+      background: rgba(79, 172, 254, 0.1);
+      border: 1px solid rgba(79, 172, 254, 0.2);
+    }
+
+    .chat-bubble-user {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .hide-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+  </style>
+</head>
+
+<body class="flex min-h-screen">
+
+  <!-- Sidebar Nav -->
+  <nav class="w-64 glass border-r border-white/5 flex flex-col p-6 space-y-8 h-screen sticky top-0">
+    <div>
+      <h1 class="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-emerald-400">
+        BulkReply.io
+      </h1>
+      <p class="text-[10px] uppercase tracking-tighter text-white/30 font-bold mt-1">AI Business Suite</p>
+    </div>
+
+    <div class="flex-1 space-y-2">
+      <button onclick="switchTab('connection')" id="nav-connection"
+        class="nav-link w-full text-left px-4 py-3 rounded-xl text-sm flex items-center space-x-3 active">
+        <span>🔌</span> <span>Connection</span>
+      </button>
+      <button onclick="switchTab('campaign')" id="nav-campaign"
+        class="nav-link w-full text-left px-4 py-3 rounded-xl text-sm flex items-center space-x-3">
+        <span>🚀</span> <span>Campaign Hub</span>
+      </button>
+      <button onclick="switchTab('admin-ai')" id="nav-admin-ai"
+        class="nav-link w-full text-left px-4 py-3 rounded-xl text-sm flex items-center space-x-3">
+        <span>🤖</span> <span>Admin AI Chat</span>
+      </button>
+    </div>
+
+    <div id="connection-status-dot" class="flex items-center space-x-2 text-[10px] text-white/40">
+      <div id="status-dot" class="w-2 h-2 rounded-full bg-red-500 ring-4 ring-red-500/20"></div>
+      <span id="status-label">Disconnected</span>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="flex-1 p-8 max-w-5xl mx-auto">
+
+    <!-- Connection Tab -->
+    <section id="tab-connection" class="tab-content space-y-6">
+      <div class="glass p-8 rounded-3xl text-center space-y-6 max-w-md mx-auto">
+        <h2 class="text-xl font-bold">Link WhatsApp Account</h2>
+        <div id="setup-section" class="space-y-4">
+          <div class="text-left space-y-1">
+            <label class="text-[10px] uppercase text-white/30 font-bold ml-1">Session ID</label>
+            <input type="text" id="sessionId" placeholder="Session Name" value="my-first-session"
+              class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none">
+          </div>
+          <div class="text-left space-y-1">
+            <label class="text-[10px] uppercase text-white/30 font-bold ml-1">Owner Control Number (+91...)</label>
+            <input type="text" id="ownerNumberInput" placeholder="918302XXXXXX"
+              class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none">
+          </div>
+          <button id="startBtn" class="w-full btn-primary font-bold py-4 rounded-xl uppercase text-xs">Generate
+            QR</button>
+        </div>
+        <div id="qr-container" class="hidden flex flex-col items-center">
+          <div class="bg-white p-4 rounded-2xl" id="qrcode"></div>
+          <p class="mt-4 text-emerald-400 text-sm font-semibold italic animate-pulse">Awaiting Scan...</p>
+        </div>
+        <div id="success-container" class="hidden py-4">
+          <div
+            class="w-20 h-20 bg-emerald-500/10 border border-emerald-500/50 rounded-full flex items-center justify-center mx-auto mb-4">
+            <span class="text-3xl">✅</span>
+          </div>
+          <h3 class="text-xl font-bold">Authenticated!</h3>
+          <p class="text-white/40 text-sm">Session stored safely in cloud.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Campaign Tab -->
+    <section id="tab-campaign" class="tab-content hidden space-y-8">
+      <div class="flex justify-between items-end">
+        <div>
+          <h2 class="text-3xl font-bold">Campaign Hub</h2>
+          <p class="text-white/40">Launch bulk AI outreach campaigns</p>
+        </div>
+        <button onclick="smartPaste()"
+          class="px-4 py-2 bg-white/5 border border-white/10 rounded-lg text-xs hover:bg-white/10">Smart Paste
+          Numbers</button>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- Input Column -->
+        <div class="lg:col-span-1 space-y-6">
+          <div class="glass p-6 rounded-2xl space-y-4">
+            <h3 class="text-xs uppercase text-blue-400 font-bold tracking-widest">Business Pitch</h3>
+            <textarea id="campaignContext" placeholder="What are we selling/proposing?"
+              class="w-full h-32 bg-black/20 border border-white/10 rounded-xl p-4 text-sm focus:outline-none"></textarea>
+          </div>
+        </div>
+
+        <!-- Numbers Column -->
+        <div class="lg:col-span-2 space-y-6">
+          <div class="glass p-6 rounded-2xl space-y-4">
+            <div class="flex justify-between items-center">
+              <h3 class="text-xs uppercase text-emerald-400 font-bold tracking-widest">Target Numbers</h3>
+              <button onclick="addNumberRow()" class="text-[10px] text-blue-400 uppercase font-bold">+ Add Row</button>
+            </div>
+
+            <div id="number-rows" class="space-y-2 max-h-64 overflow-y-auto pr-2 hide-scrollbar">
+              <!-- Rows added here -->
+            </div>
+
+            <button id="launchCampaignBtn"
+              class="w-full btn-primary font-bold py-4 rounded-xl uppercase tracking-widest text-xs mt-4">
+              🚀 Launch AI Outreach
+            </button>
+            <p id="campaign-status" class="text-center text-xs text-white/30"></p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Admin AI Tab -->
+    <section id="tab-admin-ai" class="tab-content hidden h-[80vh] flex flex-col space-y-4">
+      <div class="flex items-center space-x-3 mb-2">
+        <div class="w-10 h-10 bg-blue-500/20 rounded-full flex items-center justify-center text-xl">🤖</div>
+        <div>
+          <h2 class="text-xl font-bold">Administrative AI</h2>
+          <p class="text-[10px] text-emerald-400 uppercase font-bold tracking-tighter">Powered by BulkReply Intelligence
+          </p>
+        </div>
+      </div>
+
+      <div class="flex-1 glass rounded-3xl p-6 flex flex-col space-y-4 overflow-hidden">
+        <div id="admin-chat-window" class="flex-1 overflow-y-auto space-y-4 pr-2">
+          <!-- Messages -->
+          <div class="chat-bubble-ai p-4 rounded-2xl rounded-tl-none max-w-[80%] text-sm leading-relaxed">
+            Hello! I am your AI Administrator. I can help you manage your WhatsApp outreach, check campaign status, or
+            even follow up with specific leads. How can I assist you today?
+          </div>
+        </div>
+
+        <div class="flex space-x-2">
+          <input type="text" id="adminQuery" placeholder="Ask AI: 'How many messages sent?' or 'Follow up with +91...'"
+            class="flex-1 bg-black/40 border border-white/10 rounded-xl px-5 py-3 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500/50">
+          <button id="adminSendBtn"
+            class="bg-blue-600 hover:bg-blue-500 px-6 rounded-xl font-bold transition-all">SURE</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    // --- TABS LOGIC ---
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
+      document.getElementById('tab-' + tabId).classList.remove('hidden');
+      document.querySelectorAll('.nav-link').forEach(n => n.classList.remove('active'));
+      document.getElementById('nav-' + tabId).classList.add('active');
+    }
+
+    // --- NUMBER ROWS LOGIC ---
+    function addNumberRow(val = '') {
+      const container = document.getElementById('number-rows');
+      const div = document.createElement('div');
+      div.className = "flex space-x-2 items-center row-entry";
+      div.innerHTML = `
+        <div class="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-white/40 text-xs">+91</div>
+        <input type="text" value="${val}" placeholder="83028XXXXX" class="flex-1 bg-black/20 border border-white/5 rounded-lg px-4 py-2 text-sm text-white focus:outline-none">
+        <button onclick="this.parentElement.remove()" class="text-red-500/50 hover:text-red-400 transition-all px-2">✕</button>
+      `;
+      container.appendChild(div);
+    }
+    // Add 3 rows by default
+    [1, 2, 3].forEach(() => addNumberRow());
+
+    function smartPaste() {
+      const text = prompt("Paste your content here (I will extract numbers):");
+      if (!text) return;
+      const numbers = text.match(/\d{10}/g); // Extract 10 digit numbers
+      if (numbers) {
+        document.getElementById('number-rows').innerHTML = '';
+        numbers.forEach(n => addNumberRow(n));
+      } else {
+        alert("No 10-digit numbers found!");
+      }
+    }
+
+    // --- BACKEND INTEGRATION ---
+    const startBtn = document.getElementById('startBtn');
+    const sessionIdInput = document.getElementById('sessionId');
+    const statusDot = document.getElementById('status-dot');
+    const statusLabel = document.getElementById('status-label');
+    const qrContainer = document.getElementById('qr-container');
+    const successContainer = document.getElementById('success-container');
+    const setupSection = document.getElementById('setup-section');
+    let qrcodeObj = null;
+
+    startBtn.onclick = async () => {
+      const sessionId = sessionIdInput.value.trim();
+      const ownerNumberInput = document.getElementById('ownerNumberInput');
+      let ownerNumber = ownerNumberInput.value.trim().replace(/[^\d]/g, '');
+
+      if (!sessionId) return alert('Session Name Required');
+      if (!ownerNumber || ownerNumber.length < 10) return alert('Owner Number Required (with 91 prefix)');
+      if (ownerNumber.length === 10) ownerNumber = '91' + ownerNumber;
+
+      startBtn.disabled = true;
+      startBtn.textContent = 'Initializing...';
+
+      try {
+        await fetch('/session/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId, ownerNumber })
+        });
+        startPolling(sessionId);
+      } catch (e) {
+        alert('Server Error');
+        startBtn.disabled = false;
+      }
+    };
+
+    // Session ID keydown (Enter)
+    sessionIdInput.onkeydown = (e) => {
+      if (e.key === 'Enter') startBtn.click();
+    };
+
+    function startPolling(sessionId) {
+      setInterval(async () => {
+        const res = await fetch(`/session/status/${sessionId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        if (data.status === 'scan_qr' && data.qr) {
+          setupSection.classList.add('hidden');
+          qrContainer.classList.remove('hidden');
+          if (!qrcodeObj) {
+            qrcodeObj = new QRCode(document.getElementById("qrcode"), { text: data.qr, width: 200, height: 200 });
+          } else {
+            qrcodeObj.makeCode(data.qr);
+          }
+        }
+
+        if (data.status === 'connected') {
+          qrContainer.classList.add('hidden');
+          successContainer.classList.remove('hidden');
+          statusDot.className = "w-2 h-2 rounded-full bg-emerald-500 ring-4 ring-emerald-500/20";
+          statusLabel.textContent = "Live & Connected";
+          statusLabel.classList.remove('text-white/40');
+          statusLabel.classList.add('text-emerald-400');
+        }
+      }, 2000);
+    }
+
+    // Launch Campaign
+    document.getElementById('launchCampaignBtn').onclick = async () => {
+      const sessionId = sessionIdInput.value.trim();
+      const numbers = Array.from(document.querySelectorAll('#number-rows input'))
+        .map(i => {
+          let val = i.value.trim().replace(/[^\d]/g, '');
+          if (val.length === 10) return '91' + val;
+          if (val.length > 10 && val.startsWith('91')) return val;
+          return val; // Fallback
+        })
+        .filter(v => v.length >= 10);
+      const businessContext = document.getElementById('campaignContext').value.trim();
+
+      if (!numbers.length || !businessContext) return alert("Fill all fields");
+
+      const btn = document.getElementById('launchCampaignBtn');
+      const status = document.getElementById('campaign-status');
+      btn.disabled = true;
+      status.textContent = "AI is drafting messages... 🚀";
+
+      const res = await fetch('/campaign/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, numbers, businessContext })
+      });
+      const data = await res.json();
+      btn.disabled = false;
+      status.textContent = data.message;
+    };
+
+    // Admin Chat keydown (Enter)
+    adminQuery.onkeydown = (e) => {
+      if (e.key === 'Enter') adminSendBtn.click();
+    };
+
+    adminSendBtn.onclick = async () => {
+      const query = adminQuery.value.trim();
+      if (!query) return;
+
+      appendMessage(query, 'user');
+      adminQuery.value = '';
+
+      const res = await fetch('/admin/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, sessionId: sessionIdInput.value })
+      });
+      const data = await res.json();
+      appendMessage(data.reply, 'ai');
+    };
+
+    function appendMessage(text, type) {
+      const div = document.createElement('div');
+      div.className = `p-4 rounded-2xl text-sm leading-relaxed ${type === 'ai' ? 'chat-bubble-ai self-start rounded-tl-none w-[80%]' : 'chat-bubble-user self-end rounded-tr-none ml-auto text-right w-[80%]'}`;
+      div.textContent = text;
+      chatWindow.appendChild(div);
+      chatWindow.scrollTop = chatWindow.scrollHeight;
+    }
+  </script>
+</body>
+
+</html>

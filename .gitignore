@@ -4,3 +4,4 @@ dist/
 wa_credentials/
 test/
 src/test/
+.env

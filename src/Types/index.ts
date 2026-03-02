@@ -67,6 +67,7 @@ export interface StartSessionParams {
   onConnected?: () => void;
   onConnecting?: () => void;
   onDisconnected?: () => void;
+  ownerNumber?: string;
 
   // message events
   onMessageReceived?: (message: MessageReceived) => void;
@@ -100,10 +101,10 @@ export interface StartSessionWithPairingCodeParams {
 export type MessageUpdated = WAMessageUpdate & {
   sessionId: string;
   messageStatus:
-    | "error"
-    | "pending"
-    | "server"
-    | "delivered"
-    | "read"
-    | "played";
+  | "error"
+  | "pending"
+  | "server"
+  | "delivered"
+  | "read"
+  | "played";
 };

@@ -6,6 +6,7 @@ Lightweight library for whatsapp. Not require Selenium or any other browser.
 
 Stand above [Baileys](https://github.com/WhiskeySockets/Baileys) Library.
 
+npm run dev
 ## Installation
 
 Install package using npm
