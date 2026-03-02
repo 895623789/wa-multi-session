@@ -38,8 +38,9 @@ const tools: FunctionDeclaration[] = [
                     description: 'The session ID to send from. If the user does not specify, use the first available active session.'
                 },
                 to: {
-                    type: SchemaType.STRING,
-                    description: 'The recipient phone number in international format, e.g. 919876543210 (country code + number, no +)'
+                    type: SchemaType.ARRAY,
+                    description: 'The recipient phone numbers in international format, e.g. ["919876543210"] (country code + number, no +). Can be multiple if asked to send to multiple people.',
+                    items: { type: SchemaType.STRING }
                 },
                 message: {
                     type: SchemaType.STRING,
@@ -84,7 +85,8 @@ export async function generateAdminReply(
     query: string,
     stats: SystemStats,
     file?: FileAttachment,
-    sendWhatsappFn?: (sessionId: string, to: string, message: string) => Promise<void>
+    sendWhatsappFn?: (sessionId: string, to: string, message: string) => Promise<void>,
+    history?: any[]
 ): Promise<AgentReply> {
     try {
         const model = genAI.getGenerativeModel({
@@ -113,11 +115,17 @@ RULES:
 - For storage: NEVER save automatically. If the file looks important, suggest saving and ask. Do not call saveToFirebaseStorage unless user explicitly confirms.`,
         });
 
-        // Build content parts
-        const parts: Part[] = [{ text: query || 'Please analyze the attached file.' }];
+        // Convert history format if provided
+        const formattedHistory = (history || []).map(msg => ({
+            role: msg.role === 'ai' ? 'model' : 'user',
+            parts: [{ text: msg.text || '' }]
+        }));
+
+        // Build current content parts
+        const currentParts: Part[] = [{ text: query || 'Please analyze the attached file.' }];
 
         if (file) {
-            parts.push({
+            currentParts.push({
                 inlineData: {
                     data: file.buffer.toString('base64'),
                     mimeType: file.mimeType as any
@@ -125,14 +133,20 @@ RULES:
             });
 
             // If file seems important, prompt AI to ask about storage
-            parts.push({
+            currentParts.push({
                 text: `[SYSTEM NOTE: A file named "${file.originalName}" (${file.mimeType}) was attached. After responding, if this file seems important to keep permanently, ask the user if they want to save it to Firebase Storage.]`
             });
         }
 
+        // Add current message to history
+        formattedHistory.push({
+            role: 'user',
+            parts: currentParts
+        });
+
         // First call
         const result = await model.generateContent({
-            contents: [{ role: 'user', parts }],
+            contents: formattedHistory,
             tools: [{ functionDeclarations: tools }]
         });
 
@@ -148,14 +162,20 @@ RULES:
 
             // ── sendWhatsappMessage ──────────────────────────────────────
             if (fc.name === 'sendWhatsappMessage' && sendWhatsappFn) {
-                const args = fc.args as { sessionId: string; to: string; message: string };
-                // Add @s.whatsapp.net suffix if not present
-                const to = args.to.includes('@') ? args.to : `${args.to}@s.whatsapp.net`;
+                const args = fc.args as { sessionId: string; to: string[]; message: string };
 
                 try {
-                    await sendWhatsappFn(args.sessionId, to, args.message);
+                    let sentCount = 0;
+                    const targets = Array.isArray(args.to) ? args.to : [args.to];
+
+                    for (const rawNumber of targets) {
+                        const to = rawNumber.includes('@') ? rawNumber : `${rawNumber}@s.whatsapp.net`;
+                        await sendWhatsappFn(args.sessionId, to, args.message);
+                        sentCount++;
+                    }
+
                     return {
-                        text: `✅ Message sent successfully!\n\n**To:** ${args.to}\n**Session:** ${args.sessionId}\n**Message:** "${args.message}"\n\nThe message has been delivered via WhatsApp.`,
+                        text: `✅ Message sent successfully!\n\n**To:** ${targets.join(', ')}\n**Session:** ${args.sessionId}\n**Message:** "${args.message}"\n\nThe message has been delivered to ${sentCount} recipient(s) via WhatsApp.`,
                         whatsappSent: true
                     };
                 } catch (err: any) {

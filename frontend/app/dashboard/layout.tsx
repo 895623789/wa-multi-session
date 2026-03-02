@@ -7,13 +7,13 @@ import DashboardNavbar from "@/components/DashboardNavbar";
 import { useAuth } from "@/components/AuthProvider";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
-import { LayoutDashboard, MessageCircle, Send, Settings, LogOut } from "lucide-react";
+import { LayoutDashboard, MessageCircle, Send, Settings, LogOut, User } from "lucide-react";
 
 const mobileNavLinks = [
     { name: "Home", href: "/dashboard", icon: LayoutDashboard },
     { name: "Sessions", href: "/dashboard/sessions", icon: MessageCircle },
     { name: "Campaigns", href: "/dashboard/campaigns", icon: Send },
-    { name: "AI Admin", href: "/dashboard/admin", icon: Settings },
+    { name: "Profile", href: "/dashboard/profile", icon: User },
 ];
 
 function MobileBottomNav() {

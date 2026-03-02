@@ -133,17 +133,20 @@ export default function NeuralAdminPage() {
         setLoading(true);
 
         try {
-            let res: Response;
-            if (fileToSend) {
-                const formData = new FormData();
-                formData.append('query', userText);
-                formData.append('file', fileToSend);
-                res = await fetch("http://localhost:5000/admin/chat", { method: "POST", body: formData });
-            } else {
-                const formData = new FormData();
-                formData.append('query', userText);
-                res = await fetch("http://localhost:5000/admin/chat", { method: "POST", body: formData });
+            const formData = new FormData();
+            formData.append('query', userText);
+            if (fileToSend) formData.append('file', fileToSend);
+
+            // Send history (skip the first welcome message to save tokens)
+            const chatHistory = messages.slice(1).map(m => ({
+                role: m.role,
+                text: m.text
+            }));
+            if (chatHistory.length > 0) {
+                formData.append('history', JSON.stringify(chatHistory));
             }
+
+            const res = await fetch("http://localhost:5000/admin/chat", { method: "POST", body: formData });
 
             const data = await res.json();
 

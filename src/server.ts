@@ -409,11 +409,22 @@ app.post("/admin/chat", upload.single('file'), async (req: any, res) => {
       await whatsapp.sendText({ sessionId, to, text: message });
     };
 
+    // Parse chat history if provided
+    let history = [];
+    if (req.body?.history) {
+      try {
+        history = JSON.parse(req.body.history);
+      } catch (e) {
+        console.warn("Invalid JSON for admin chat history", e);
+      }
+    }
+
     const agentReply = await generateAdminReply(
       query,
       { activeSessions: sessions, pendingMessages: queueStats.pending, sentMessages: queueStats.sent },
       fileAttachment,
-      sendWhatsappFn
+      sendWhatsappFn,
+      history
     );
 
     res.json(agentReply);

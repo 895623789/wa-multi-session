@@ -2,7 +2,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, MessageCircle, Send, Settings, MessageSquare, LogOut } from "lucide-react";
+import { LayoutDashboard, MessageCircle, Send, Settings, MessageSquare, LogOut, User } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 
@@ -14,6 +14,7 @@ export default function DashboardSidebar() {
         { name: "Sessions", href: "/dashboard/sessions", icon: MessageCircle },
         { name: "Campaigns", href: "/dashboard/campaigns", icon: Send },
         { name: "Neural Admin", href: "/dashboard/admin", icon: Settings },
+        { name: "Profile", href: "/dashboard/profile", icon: User },
     ];
 
     return (
