@@ -1,10 +1,19 @@
 "use client";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import Image from "next/image";
 
 export default function HeroSection() {
+    const [backendStatus, setBackendStatus] = useState("Disconnected");
+
+    useEffect(() => {
+        fetch("http://localhost:5000/session/list")
+            .then(res => res.ok ? res.json() : Promise.reject('Not ok')) // Changed throw new Error to Promise.reject for consistency
+            .then(data => setBackendStatus("Connected to API"))
+            .catch(err => setBackendStatus("Connection Failed"));
+    }, []);
+
     return (
         <section className="relative pt-20 pb-32 overflow-hidden">
             {/* Background decoration */}
@@ -21,9 +30,15 @@ export default function HeroSection() {
                         transition={{ duration: 0.6 }}
                         className="max-w-2xl"
                     >
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 border border-blue-100 text-blue-600 mb-8">
-                            <span className="flex h-2 w-2 rounded-full bg-blue-600"></span>
-                            <span className="text-xs font-semibold uppercase tracking-wider">v4.0 Live Now</span>
+                        <div className="inline-flex items-center gap-4 px-3 py-1 rounded-full bg-blue-50 border border-blue-100 mb-8">
+                            <div className="flex items-center gap-2 text-blue-600">
+                                <span className="flex h-2 w-2 rounded-full bg-blue-600"></span>
+                                <span className="text-xs font-semibold uppercase tracking-wider">v4.0 Live Now</span>
+                            </div>
+                            <div className="w-px h-4 bg-blue-200"></div>
+                            <div className={`text-xs font-bold uppercase ${backendStatus.includes('Connected') ? 'text-green-600' : 'text-red-500'}`}>
+                                API: {backendStatus}
+                            </div>
                         </div>
 
                         <h1 className="text-5xl lg:text-6xl font-extrabold tracking-tight text-slate-900 leading-[1.1] mb-6 font-outfit">
@@ -37,12 +52,19 @@ export default function HeroSection() {
                             Automate multi-session outreach, manage campaigns effortlessly, and hit the inbox every time with our advanced anti-ban AI core.
                         </p>
 
-                        <form className="flex flex-col sm:flex-row gap-3 min-w-full sm:min-w-0 max-w-md mb-6" onSubmit={(e) => e.preventDefault()}>
+                        <form
+                            className="flex flex-col sm:flex-row gap-3 min-w-full sm:min-w-0 max-w-md mb-6"
+                            onSubmit={(e) => {
+                                e.preventDefault();
+                                window.location.href = "/signup";
+                            }}
+                        >
                             <input
                                 type="email"
                                 placeholder="Enter your work email"
                                 className="flex-1 px-4 py-3.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-900 shadow-sm"
                                 required
+                                suppressHydrationWarning
                             />
                             <button
                                 type="submit"

@@ -1,12 +1,15 @@
 import express from "express";
 import cors from "cors";
+import dotenv from "dotenv";
 import { Whatsapp, FirebaseAdapter } from "./index";
 import { generateAutoReply, generateOutreach } from "./Services/AIHandler";
 import { generateAdminReply } from "./Services/AdminHandler";
 import { MessageQueue } from "./Services/MessageQueue";
 
+dotenv.config();
+
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
