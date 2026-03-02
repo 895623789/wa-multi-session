@@ -3,8 +3,20 @@ import React, { useState } from "react";
 import { MessageSquare, ArrowRight, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { auth } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
+
+function firebaseError(code: string): string {
+    const map: Record<string, string> = {
+        'auth/email-already-in-use': '⚠️ This email is already registered. Please log in instead.',
+        'auth/invalid-email': '⚠️ Please enter a valid email address.',
+        'auth/weak-password': '⚠️ Password must be at least 6 characters.',
+        'auth/operation-not-allowed': '⚠️ Sign-ups are currently disabled. Please contact support.',
+        'auth/network-request-failed': '⚠️ Network error. Please check your internet connection.',
+    };
+    return map[code] || '⚠️ Something went wrong. Please try again.';
+}
 
 export default function SignupPage() {
     const [firstName, setFirstName] = useState("");
@@ -25,10 +37,28 @@ export default function SignupPage() {
             await updateProfile(userCredential.user, {
                 displayName: `${firstName} ${lastName}`
             });
-            window.location.href = "/dashboard";
+
+            // Create Firestore user document (1 write)
+            await setDoc(doc(db, "users", userCredential.user.uid), {
+                displayName: `${firstName} ${lastName}`,
+                email: email,
+                company: company || "",
+                phone: "",
+                industry: "",
+                teamSize: "",
+                role: "",
+                location: "",
+                onboardingComplete: false,
+                plan: "free",
+                sessions: [],
+                createdAt: serverTimestamp(),
+                updatedAt: serverTimestamp()
+            });
+
+            window.location.href = "/onboarding";
         } catch (err: any) {
             console.error(err);
-            setError(err.message || "Failed to create account.");
+            setError(firebaseError(err.code));
         } finally {
             setLoading(false);
         }

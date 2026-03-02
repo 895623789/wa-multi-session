@@ -1,8 +1,10 @@
 "use client";
 import React, { useState, useEffect, useCallback } from "react";
-import { QrCode, RefreshCw, Power, Plus, Smartphone, AlertTriangle, Wifi, Languages, XCircle } from "lucide-react";
-import Link from "next/link";
+import { QrCode, RefreshCw, Smartphone, AlertTriangle, Wifi, Languages, XCircle } from "lucide-react";
 import QRCode from "react-qr-code";
+import { useAuth } from "@/components/AuthProvider";
+import { doc, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 // ─── Bilingual Content ────────────────────────────────────────────────────────
 const content = {
@@ -116,6 +118,9 @@ function DisconnectModal({
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function SessionsPage() {
+    const { user } = useAuth();
+    const uid = user?.uid || '';
+
     const [sessions, setSessions] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -124,14 +129,19 @@ export default function SessionsPage() {
     const [qrCode, setQrCode] = useState("");
     const [creationStatus, setCreationStatus] = useState("");
     const [isPolling, setIsPolling] = useState(false);
+    const [fullSessionId, setFullSessionId] = useState(""); // uid_name format
 
     // Disconnect modal state
     const [modalSession, setModalSession] = useState<string | null>(null);
     const [disconnecting, setDisconnecting] = useState(false);
 
+    // Display name: strip uid prefix
+    const displayName = (id: string) => id.startsWith(uid + '_') ? id.slice(uid.length + 1) : id;
+
     const fetchSessions = useCallback(async () => {
+        if (!uid) return;
         try {
-            const res = await fetch("http://localhost:5000/session/list");
+            const res = await fetch(`http://localhost:5000/session/list?uid=${uid}`);
             const data = await res.json();
             setSessions(data.sessions || []);
         } catch (e) {
@@ -139,15 +149,17 @@ export default function SessionsPage() {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [uid]);
 
     useEffect(() => { fetchSessions(); }, [fetchSessions]);
 
     const confirmDisconnect = async () => {
-        if (!modalSession) return;
+        if (!modalSession || !uid) return;
         setDisconnecting(true);
         try {
-            await fetch(`http://localhost:5000/session/delete/${modalSession}`, { method: "DELETE" });
+            await fetch(`http://localhost:5000/session/delete/${modalSession}?uid=${uid}`, { method: "DELETE" });
+            // Remove from Firestore user doc
+            await updateDoc(doc(db, "users", uid), { sessions: arrayRemove(modalSession) });
             setModalSession(null);
             await fetchSessions();
         } catch (e) {
@@ -159,8 +171,10 @@ export default function SessionsPage() {
 
     const handleCreateSession = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newSessionId) return;
+        if (!newSessionId || !uid) return;
 
+        const scopedId = `${uid}_${newSessionId}`;
+        setFullSessionId(scopedId);
         setCreationStatus("Starting session...");
         setQrCode("");
 
@@ -168,7 +182,7 @@ export default function SessionsPage() {
             const res = await fetch("http://localhost:5000/session/start", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ sessionId: newSessionId })
+                body: JSON.stringify({ sessionId: scopedId, uid })
             });
             const data = await res.json();
 
@@ -184,11 +198,11 @@ export default function SessionsPage() {
     };
 
     useEffect(() => {
-        if (!isPolling || !newSessionId) return;
+        if (!isPolling || !fullSessionId) return;
 
         const interval = setInterval(async () => {
             try {
-                const res = await fetch(`http://localhost:5000/session/status/${newSessionId}`);
+                const res = await fetch(`http://localhost:5000/session/status/${fullSessionId}`);
                 const statusData = await res.json();
 
                 if (statusData.qr) {
@@ -197,20 +211,25 @@ export default function SessionsPage() {
                 }
 
                 if (statusData.status === 'connected') {
-                    setCreationStatus(`✅ Session ${newSessionId} Connected!`);
+                    setCreationStatus(`✅ Session connected!`);
                     setQrCode("");
                     setIsPolling(false);
+                    // Save to Firestore user doc
+                    if (uid) {
+                        await updateDoc(doc(db, "users", uid), { sessions: arrayUnion(fullSessionId) });
+                    }
                     fetchSessions();
                     setNewSessionId("");
+                    setFullSessionId("");
                 }
 
                 if (statusData.status === 'duplicate_rejected') {
-                    setCreationStatus(`❌ This WhatsApp number is already connected in another session! Please use a different number.`);
+                    setCreationStatus(`❌ This WhatsApp number is already connected! Please use a different number.`);
                     setQrCode("");
                     setIsPolling(false);
                 }
 
-            } catch (e) { /* ignore polling errors */ }
+            } catch (e) { /* ignore */ }
         }, 2000);
 
         return () => clearInterval(interval);
@@ -248,7 +267,7 @@ export default function SessionsPage() {
                             </div>
                         ) : sessions.length === 0 ? (
                             <div className="p-8 border-2 border-dashed border-slate-200 rounded-xl text-center">
-                                <Link2 className="w-8 h-8 text-slate-300 mx-auto mb-3" />
+                                <QrCode className="w-8 h-8 text-slate-300 mx-auto mb-3" />
                                 <h3 className="text-sm font-bold text-slate-900 mb-1">No Active Sessions</h3>
                                 <p className="text-xs text-slate-500">Create a new session to the right to get started.</p>
                             </div>
@@ -269,7 +288,7 @@ export default function SessionsPage() {
 
                                         {/* Center: Info */}
                                         <div className="flex-1 min-w-0">
-                                            <p className="font-semibold text-slate-800 truncate text-sm">{id}</p>
+                                            <p className="font-semibold text-slate-800 truncate text-sm">{displayName(id)}</p>
                                             <div className="flex items-center gap-2 mt-0.5">
                                                 <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
                                                     ● Live

@@ -3,8 +3,22 @@ import React, { useState } from "react";
 import { MessageSquare, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { auth } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { signInWithEmailAndPassword } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
+
+function firebaseError(code: string): string {
+    const map: Record<string, string> = {
+        'auth/invalid-credential': '⚠️ Wrong email or password. Please try again.',
+        'auth/user-not-found': '⚠️ No account found with this email. Please sign up.',
+        'auth/wrong-password': '⚠️ Incorrect password. Please try again.',
+        'auth/too-many-requests': '⚠️ Too many failed attempts. Please wait a few minutes and try again.',
+        'auth/user-disabled': '⚠️ This account has been disabled. Please contact support.',
+        'auth/invalid-email': '⚠️ Please enter a valid email address.',
+        'auth/network-request-failed': '⚠️ Network error. Please check your internet connection.',
+    };
+    return map[code] || '⚠️ Login failed. Please check your credentials and try again.';
+}
 
 export default function LoginPage() {
     const [email, setEmail] = useState("");
@@ -18,11 +32,17 @@ export default function LoginPage() {
         setError("");
 
         try {
-            await signInWithEmailAndPassword(auth, email, password);
-            window.location.href = "/dashboard";
+            const cred = await signInWithEmailAndPassword(auth, email, password);
+            // Check onboarding status (1 read)
+            const userDoc = await getDoc(doc(db, "users", cred.user.uid));
+            if (userDoc.exists() && userDoc.data()?.onboardingComplete) {
+                window.location.href = "/dashboard";
+            } else {
+                window.location.href = "/onboarding";
+            }
         } catch (err: any) {
             console.error(err);
-            setError(err.message || "Failed to sign in.");
+            setError(firebaseError(err.code));
         } finally {
             setLoading(false);
         }

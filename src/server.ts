@@ -215,8 +215,12 @@ queue.startWorker().catch(err => console.error("Queue Start Error:", err));
  * Body: { "sessionId": "my-user-1" }
  */
 app.post("/session/start", async (req, res) => {
-  const { sessionId, ownerNumber } = req.body;
+  const { sessionId, uid, ownerNumber } = req.body;
   if (!sessionId) return res.status(400).json({ error: "sessionId is required" });
+  // UID ownership: if uid provided, sessionId MUST start with uid_
+  if (uid && !sessionId.startsWith(`${uid}_`)) {
+    return res.status(403).json({ error: "Session ID does not belong to this user." });
+  }
 
   try {
     const existing = await whatsapp.getSessionById(sessionId);
@@ -257,7 +261,13 @@ app.post("/session/start", async (req, res) => {
  */
 app.delete("/session/delete/:sessionId", async (req, res) => {
   const { sessionId } = req.params;
+  const uid = req.query.uid as string | undefined;
   if (!sessionId) return res.status(400).json({ error: "sessionId is required" });
+
+  // UID ownership check: block if uid provided but session doesn't belong to user
+  if (uid && !sessionId.startsWith(`${uid}_`)) {
+    return res.status(403).json({ error: "You don't have permission to delete this session." });
+  }
 
   try {
     const session = await whatsapp.getSessionById(sessionId);
@@ -291,7 +301,12 @@ app.delete("/session/delete/:sessionId", async (req, res) => {
  * GET http://localhost:3000/session/list
  */
 app.get("/session/list", async (req, res) => {
-  const sessions = await whatsapp.getSessionsIds();
+  const uid = req.query.uid as string | undefined;
+  let sessions = await whatsapp.getSessionsIds();
+  // Filter by uid prefix for tenant isolation
+  if (uid) {
+    sessions = sessions.filter((s: string) => s.startsWith(`${uid}_`));
+  }
   res.json({ sessions });
 });
 
@@ -391,7 +406,7 @@ app.post("/admin/chat", upload.single('file'), async (req: any, res) => {
 
     // WhatsApp send function for AI function calling
     const sendWhatsappFn = async (sessionId: string, to: string, message: string) => {
-      await whatsapp.sendText(sessionId, to, message);
+      await whatsapp.sendText({ sessionId, to, text: message });
     };
 
     const agentReply = await generateAdminReply(

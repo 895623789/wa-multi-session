@@ -3,6 +3,8 @@ import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, MessageCircle, Send, Settings, MessageSquare, LogOut } from "lucide-react";
+import { signOut } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 
 export default function DashboardSidebar() {
     const pathname = usePathname();
@@ -39,8 +41,8 @@ export default function DashboardSidebar() {
                             key={link.name}
                             href={link.href}
                             className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${isActive
-                                    ? "bg-blue-50 text-blue-600"
-                                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                                ? "bg-blue-50 text-blue-600"
+                                : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
                                 }`}
                         >
                             <Icon className={`w-4 h-4 ${isActive ? "text-blue-600" : "text-slate-400"}`} />
@@ -52,7 +54,7 @@ export default function DashboardSidebar() {
 
             {/* Bottom Profile/Logout */}
             <div className="p-4 border-t border-slate-100">
-                <button onClick={() => window.location.href = "/login"} className="flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
+                <button onClick={async () => { await signOut(auth); window.location.href = "/login"; }} className="flex w-full items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">
                     <LogOut className="w-4 h-4 text-slate-400" />
                     Log out
                 </button>

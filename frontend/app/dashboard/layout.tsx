@@ -1,9 +1,12 @@
 "use client";
 import React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import DashboardSidebar from "@/components/DashboardSidebar";
 import DashboardNavbar from "@/components/DashboardNavbar";
+import { useAuth } from "@/components/AuthProvider";
+import { signOut } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 import { LayoutDashboard, MessageCircle, Send, Settings, LogOut } from "lucide-react";
 
 const mobileNavLinks = [
@@ -15,6 +18,10 @@ const mobileNavLinks = [
 
 function MobileBottomNav() {
     const pathname = usePathname();
+    const handleLogout = async () => {
+        await signOut(auth);
+        window.location.href = "/login";
+    };
     return (
         <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-white/80 backdrop-blur-xl border-t border-slate-200 pb-safe">
             <div className="flex items-center justify-around h-16 px-2 max-w-lg mx-auto">
@@ -41,7 +48,7 @@ function MobileBottomNav() {
                     );
                 })}
                 <button
-                    onClick={() => window.location.href = '/login'}
+                    onClick={handleLogout}
                     className="relative flex flex-col items-center justify-center gap-1 flex-1 h-full rounded-2xl text-slate-400 active:scale-90 transition-all"
                 >
                     <LogOut className="w-5 h-5" />
@@ -57,13 +64,26 @@ export default function DashboardLayout({
 }: {
     children: React.ReactNode;
 }) {
+    const { user, userData, loading } = useAuth();
+    const router = useRouter();
+
+    // Auth guard
+    if (!loading && !user) {
+        router.replace("/login");
+        return null;
+    }
+    if (!loading && userData && !userData.onboardingComplete) {
+        router.replace("/onboarding");
+        return null;
+    }
+
     return (
         <div className="flex h-screen bg-[#F9FAFB] overflow-hidden">
             <DashboardSidebar />
             <div className="flex flex-col flex-1 min-w-0">
                 <DashboardNavbar />
                 <main className="flex-1 overflow-auto p-4 sm:p-8 relative pb-20 md:pb-8">
-                    {/* Subtle noise/gradient background for internal pages as well to keep the premium feel */}
+                    {/* Subtle noise/gradient background */}
                     <div className="absolute top-0 right-0 -z-10 w-[600px] h-[600px] bg-blue-50 rounded-full blur-3xl opacity-50 translate-x-1/2 -translate-y-1/2 pointer-events-none" />
                     <div className="max-w-7xl mx-auto w-full">
                         {children}
@@ -74,3 +94,4 @@ export default function DashboardLayout({
         </div>
     );
 }
+
