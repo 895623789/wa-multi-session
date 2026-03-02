@@ -173,12 +173,16 @@ export default function OnboardingPage() {
         return () => clearInterval(interval);
     }, [isPolling, user]);
 
-    // Auto-start bot when reaching step 5
+    // Auto-start bot early when reaching the last welcome slide (step 4)
+    // so it's ready by the time they click next to step 5.
     useEffect(() => {
-        if (step === 5 && !qrCode && !isPolling) {
+        if ((step === 4 || step === 5) && !qrCode && !isPolling) {
+            if (botStatus.includes("Starting") || botStatus.includes("connected") || botStatus.includes("active") || botStatus.includes("Redirecting")) {
+                return;
+            }
             startFirstBot();
         }
-    }, [step, qrCode, isPolling, startFirstBot]);
+    }, [step, qrCode, isPolling, startFirstBot, botStatus]);
 
     // ── Validation ───────────────────────────────────────────────────────────
     const canProceed = () => {
