@@ -1,75 +1,23 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
 @layer base {
   :root {
-    --background: 222 47% 4%;
-    /* #020617 */
-    --foreground: 210 40% 98%;
-    /* #F8FAFC */
-    --card: 222 47% 6%;
-    /* #0F172A approx */
-    --card-foreground: 210 40% 98%;
-    --popover: 222 47% 4%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 263 83% 58%;
-    /* #7C3AED */
-    --primary-foreground: 210 40% 98%;
-    --secondary: 188 86% 43%;
-    /* #06B6D4 */
-    --secondary-foreground: 222 47% 11%;
-    --muted: 217 33% 17%;
-    --muted-foreground: 215 20% 65%;
-    /* #94A3B8 approx */
-    --accent: 217 33% 17%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 63% 31%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217 33% 17%;
-    --input: 217 33% 17%;
-    --ring: 263 83% 58%;
-    --radius: 1rem;
+    --background: #ffffff;
+    --foreground: #0f172a;
+    --primary: #2563eb;
+    --primary-foreground: #ffffff;
   }
 }
 
-* {
-  border-color: hsl(var(--border));
-}
-
 body {
-  background-color: hsl(var(--background));
-  color: hsl(var(--foreground));
-  font-family: var(--font-manrope), sans-serif;
-  font-feature-settings: "rlig" 1, "calt" 1;
+  background-color: var(--background);
+  color: var(--foreground);
 }
 
-h1,
-h2,
-h3,
-h4,
-h5,
-h6 {
-  font-family: var(--font-outfit), sans-serif;
-  letter-spacing: -0.02em;
-}
-
-.glass {
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.gradient-bg {
-  background: radial-gradient(circle at top right, rgba(124, 58, 237, 0.1), transparent),
-    radial-gradient(circle at bottom left, rgba(6, 182, 212, 0.1), transparent);
-}
-
-.neon-shadow {
-  box-shadow: 0 0 20px rgba(124, 58, 237, 0.3);
-}
-
-.neon-shadow:hover {
-  box-shadow: 0 0 30px rgba(124, 58, 237, 0.5);
+.glass-panel {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: 0 10px 40px -10px rgba(0,0,0,0.08);
 }
