@@ -31,8 +31,8 @@ export default function DashboardSidebar() {
             {/* Brand/Logo */}
             <div className="mb-10 w-full flex items-center justify-center group-hover/sidebar:justify-start px-1">
                 <Link href="/" className="flex items-center gap-3 w-full">
-                    <div className="flex items-center justify-center w-12 h-12 shrink-0 rounded-[18px] bg-gradient-to-tr from-indigo-600 to-violet-600 text-white shadow-lg hover:scale-105 transition-transform">
-                        <Image src="/logo.png" alt="Logo" width={24} height={24} className="rounded-md object-contain" />
+                    <div className="flex items-center justify-center w-12 h-12 shrink-0 rounded-[18px] bg-slate-900 overflow-hidden shadow-lg hover:scale-105 transition-transform border border-amber-500/30">
+                        <Image src="/logo.png" alt="Logo" width={48} height={48} className="object-cover" />
                     </div>
                     <span className="text-xl font-bold tracking-tight font-outfit opacity-0 group-hover/sidebar:opacity-100 transition-opacity duration-300 whitespace-nowrap"
                         style={{ color: 'var(--text-primary)' }}>

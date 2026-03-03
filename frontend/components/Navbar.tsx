@@ -1,18 +1,19 @@
 import React from "react";
 import { MessageSquare } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function Navbar() {
     return (
         <header className="sticky top-0 z-50 w-full border-b border-black/5 glass-panel bg-white/80 backdrop-blur-md">
             <div className="container mx-auto max-w-7xl px-4 sm:px-6 h-16 flex items-center justify-between">
                 {/* Logo */}
-                <Link href="/" className="flex items-center gap-2 hover:opacity-90 transition-opacity">
-                    <div className="bg-blue-600 p-1.5 rounded-lg">
-                        <MessageSquare className="w-5 h-5 text-white" />
+                <Link href="/" className="flex items-center gap-3 hover:opacity-90 transition-opacity">
+                    <div className="bg-slate-900 w-10 h-10 rounded-xl overflow-hidden shadow-md flex items-center justify-center border border-amber-500/20">
+                        <Image src="/logo.png" alt="BulkReply Logo" width={32} height={32} className="object-cover" />
                     </div>
                     <span className="text-xl font-bold tracking-tight text-slate-900 font-outfit">
-                        BulkReply.io
+                        BulkReply<span className="text-blue-600">.io</span>
                     </span>
                 </Link>
 

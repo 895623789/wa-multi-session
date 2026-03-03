@@ -16,6 +16,10 @@ export const metadata: Metadata = {
   title: "BulkReply.io | AI WhatsApp Manager",
   description: "Next-gen AI WhatsApp marketing and automated management.",
   manifest: "/manifest.json",
+  icons: {
+    icon: "/logo.png",
+    apple: "/logo.png",
+  },
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
