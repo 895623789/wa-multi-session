@@ -29,6 +29,7 @@ const phoneToSessionGuard = new Map<string, string>();
 // Initialize the WhatsApp engine with Firebase adapter
 const whatsapp = new Whatsapp({
   adapter: new FirebaseAdapter(),
+  autoLoad: false,
   onConnecting: (sessionId) => {
     console.log(`[${sessionId}] Connecting...`);
     sessionStatuses.set(sessionId, { status: 'connecting' });

@@ -8,8 +8,9 @@ export default function HeroSection() {
     const [backendStatus, setBackendStatus] = useState("Disconnected");
 
     useEffect(() => {
-        fetch("http://localhost:5000/session/list")
-            .then(res => res.ok ? res.json() : Promise.reject('Not ok')) // Changed throw new Error to Promise.reject for consistency
+        const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+        fetch(`${baseUrl}/session/list`)
+            .then(res => res.ok ? res.json() : Promise.reject('Not ok'))
             .then(data => setBackendStatus("Connected to API"))
             .catch(err => setBackendStatus("Connection Failed"));
     }, []);

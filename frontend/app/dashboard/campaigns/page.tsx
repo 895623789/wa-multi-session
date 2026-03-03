@@ -12,14 +12,21 @@ export default function CampaignsPage() {
     const [result, setResult] = useState<any>(null);
 
     useEffect(() => {
-        fetch("http://localhost:5000/session/list")
-            .then(r => r.ok ? r.json() : { sessions: [] })
-            .then(data => {
+        const fetchSessions = async () => {
+            try {
+                const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+                const res = await fetch(`${baseUrl}/session/list`);
+                if (!res.ok) throw new Error("Could not fetch sessions");
+                const data = await res.json();
                 setSessions(data.sessions || []);
                 if (data.sessions && data.sessions.length > 0) {
                     setSelectedSession(data.sessions[0]);
                 }
-            });
+            } catch (e) {
+                console.error("Fetch sessions failed:", e);
+            }
+        };
+        fetchSessions();
     }, []);
 
     const handleStartCampaign = async (e: React.FormEvent) => {
@@ -32,7 +39,8 @@ export default function CampaignsPage() {
         const numberArray = numbers.split("\n").map(n => n.trim()).filter(n => n);
 
         try {
-            const res = await fetch("http://localhost:5000/campaign/start", {
+            const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+            const res = await fetch(`${baseUrl}/campaign/start`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -44,7 +52,7 @@ export default function CampaignsPage() {
             const data = await res.json();
             setResult({ ...data, isError: !res.ok });
         } catch (e: any) {
-            setResult({ error: "Failed to connect to API", isError: true });
+            setResult({ error: "Unable to connect to service. Please check if the backend is running.", isError: true });
         } finally {
             setLoading(false);
         }

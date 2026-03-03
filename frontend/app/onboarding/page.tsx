@@ -133,7 +133,8 @@ export default function OnboardingPage() {
         setQrCode("");
 
         try {
-            const res = await fetch("http://localhost:5000/session/start", {
+            const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+            const res = await fetch(`${baseUrl}/session/start`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ sessionId, uid: user.uid })
@@ -154,7 +155,8 @@ export default function OnboardingPage() {
         const sessionId = `${user.uid}_bot-1`;
         const interval = setInterval(async () => {
             try {
-                const res = await fetch(`http://localhost:5000/session/status/${sessionId}`);
+                const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+                const res = await fetch(`${baseUrl}/session/status/${sessionId}`);
                 const data = await res.json();
                 if (data.qr) {
                     setQrCode(data.qr);

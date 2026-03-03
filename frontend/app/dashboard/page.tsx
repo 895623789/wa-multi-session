@@ -7,15 +7,30 @@ import { motion } from "framer-motion";
 export default function DashboardHome() {
     const [sessions, setSessions] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
+    const [backendStatus, setBackendStatus] = useState("Connecting...");
 
     useEffect(() => {
-        fetch("http://localhost:5000/session/list")
-            .then(r => r.ok ? r.json() : { sessions: [] })
+        const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+        fetch(`${baseUrl}/session/list`)
+            .then(res => {
+                if (!res.ok) {
+                    setBackendStatus("Connection Failed");
+                    return Promise.reject('Network response was not ok');
+                }
+                setBackendStatus("Connected to API");
+                return res.json();
+            })
             .then(data => {
                 setSessions(data.sessions || []);
                 setLoading(false);
             })
-            .catch(() => setLoading(false));
+            .catch(error => {
+                console.error("Error fetching sessions:", error);
+                setLoading(false);
+                if (backendStatus === "Connecting...") { // Only set to failed if not already set by the .then block
+                    setBackendStatus("Connection Failed");
+                }
+            });
     }, []);
 
     // Action Grid
@@ -33,7 +48,7 @@ export default function DashboardHome() {
                     <p className="text-primary text-sm font-medium mb-1 flex items-center gap-1">
                         <ShieldCheck className="w-4 h-4" /> System secured
                     </p>
-                    <h2 className="text-3xl font-bold text-slate-800 dark:text-white font-outfit">Dashboard</h2>
+                    <h2 className="text-3xl font-bold text-slate-900 dark:text-white font-outfit">Dashboard</h2>
                 </div>
                 <div className="flex items-center space-x-4 self-end md:self-auto">
                     <button className="p-2 text-slate-400 hover:text-primary transition-colors dark:text-slate-500 dark:hover:text-white">
@@ -47,7 +62,7 @@ export default function DashboardHome() {
                         <div className="w-10 h-10 rounded-full bg-slate-200 border-2 border-white dark:border-slate-700 shadow-sm flex items-center justify-center">
                             <span className="text-sm font-bold text-slate-600">JD</span>
                         </div>
-                        <span className="hidden md:block font-medium text-slate-700 dark:text-slate-200 text-sm">John Doe</span>
+                        <span className="hidden md:block font-medium text-slate-800 dark:text-slate-100 text-sm">John Doe</span>
                     </div>
                 </div>
             </header>
@@ -56,9 +71,9 @@ export default function DashboardHome() {
                 {/* Left Column (Span 5) */}
                 <div className="md:col-span-12 lg:col-span-5 space-y-6">
                     {/* Active Connections */}
-                    <div className="bg-white dark:bg-card-dark rounded-2xl p-6 shadow-soft relative overflow-hidden glass">
+                    <div className="rounded-2xl p-6 shadow-soft relative overflow-hidden glass">
                         <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-slate-700 dark:text-slate-300 font-bold">Active Devices</h3>
+                            <h3 className="text-slate-900 dark:text-white font-bold">Active Devices</h3>
                             <Link href="/dashboard/sessions" className="text-primary text-sm font-bold hover:underline">Manage sessions</Link>
                         </div>
 
@@ -97,9 +112,9 @@ export default function DashboardHome() {
                     </div>
 
                     {/* Explore Quick Actions directly below Active Devices */}
-                    <div className="bg-white dark:bg-card-dark rounded-2xl p-6 shadow-soft glass">
+                    <div className="rounded-2xl p-6 shadow-soft glass">
                         <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-slate-700 dark:text-slate-200 font-medium">Quick Actions</h3>
+                            <h3 className="text-slate-900 dark:text-white font-bold">Quick Actions</h3>
                         </div>
                         <div className="grid grid-cols-4 gap-4">
                             {quickActions.map((action, idx) => {
@@ -120,9 +135,9 @@ export default function DashboardHome() {
                 {/* Right Column (Span 7) */}
                 <div className="md:col-span-12 lg:col-span-7 space-y-6">
                     {/* Games statistic -> Account statistic */}
-                    <div className="bg-white dark:bg-card-dark rounded-2xl p-6 shadow-soft glass">
+                    <div className="rounded-2xl p-6 shadow-soft glass">
                         <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-slate-700 dark:text-slate-300 font-bold">Account statistic</h3>
+                            <h3 className="text-slate-900 dark:text-white font-bold">Account statistic</h3>
                             <a href="#" className="text-primary text-sm font-bold hover:underline">View all statistic</a>
                         </div>
                         <div className="py-4">
@@ -134,19 +149,19 @@ export default function DashboardHome() {
                             <div className="grid grid-cols-4 gap-4 text-center divide-x divide-slate-100 dark:divide-slate-700">
                                 <div className="px-2">
                                     <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1">Total</p>
-                                    <p className="text-lg font-bold text-slate-800 dark:text-white">14,029</p>
+                                    <p className="text-lg font-bold text-slate-900 dark:text-white">14,029</p>
                                 </div>
                                 <div className="px-2">
                                     <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1">Delivered</p>
-                                    <p className="text-lg font-bold text-slate-800 dark:text-white">11,500</p>
+                                    <p className="text-lg font-bold text-slate-900 dark:text-white">11,500</p>
                                 </div>
                                 <div className="px-2">
                                     <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1">Failed</p>
-                                    <p className="text-lg font-bold text-slate-800 dark:text-white">2,029</p>
+                                    <p className="text-lg font-bold text-slate-900 dark:text-white">2,029</p>
                                 </div>
                                 <div className="px-2">
                                     <p className="text-[10px] uppercase font-bold text-slate-500 tracking-wider mb-1">Errors</p>
-                                    <p className="text-lg font-bold text-slate-800 dark:text-white">500</p>
+                                    <p className="text-lg font-bold text-slate-900 dark:text-white">500</p>
                                 </div>
                             </div>
                         </div>
@@ -154,40 +169,40 @@ export default function DashboardHome() {
 
                     {/* 4 Bento Cards */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                        <div className="bg-white dark:bg-card-dark rounded-2xl p-6 shadow-soft flex items-center glass hover:scale-[1.02] transition-transform cursor-pointer">
+                        <div className="rounded-2xl p-6 shadow-soft flex items-center glass hover:scale-[1.02] transition-transform cursor-pointer">
                             <div className="w-12 h-12 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center mr-4">
                                 <Send className="w-6 h-6 text-indigo-500" />
                             </div>
                             <div>
-                                <p className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Delivery Rate</p>
-                                <p className="text-2xl font-bold text-slate-800 dark:text-white">82%</p>
+                                <p className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">Delivery Rate</p>
+                                <p className="text-2xl font-bold text-slate-900 dark:text-white">82%</p>
                             </div>
                         </div>
-                        <div className="bg-white dark:bg-card-dark rounded-2xl p-6 shadow-soft flex items-center glass hover:scale-[1.02] transition-transform cursor-pointer">
+                        <div className="rounded-2xl p-6 shadow-soft flex items-center glass hover:scale-[1.02] transition-transform cursor-pointer">
                             <div className="w-12 h-12 rounded-full bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center mr-4">
                                 <Users className="w-6 h-6 text-pink-500" />
                             </div>
                             <div>
-                                <p className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Audience Engaged</p>
-                                <p className="text-2xl font-bold text-slate-800 dark:text-white">2,841</p>
+                                <p className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">Audience Engaged</p>
+                                <p className="text-2xl font-bold text-slate-900 dark:text-white">2,841</p>
                             </div>
                         </div>
-                        <div className="bg-white dark:bg-card-dark rounded-2xl p-6 shadow-soft flex items-center glass hover:scale-[1.02] transition-transform cursor-pointer">
+                        <div className="rounded-2xl p-6 shadow-soft flex items-center glass hover:scale-[1.02] transition-transform cursor-pointer">
                             <div className="w-12 h-12 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center mr-4">
                                 <Activity className="w-6 h-6 text-orange-500" />
                             </div>
                             <div>
-                                <p className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wide">Queue Load</p>
-                                <p className="text-2xl font-bold text-slate-800 dark:text-white">412</p>
+                                <p className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">Queue Load</p>
+                                <p className="text-2xl font-bold text-slate-900 dark:text-white">412</p>
                             </div>
                         </div>
-                        <div className="bg-white dark:bg-card-dark rounded-2xl p-6 shadow-soft flex items-center glass hover:scale-[1.02] transition-transform cursor-pointer">
+                        <div className="rounded-2xl p-6 shadow-soft flex items-center glass hover:scale-[1.02] transition-transform cursor-pointer">
                             <div className="w-12 h-12 rounded-full bg-teal-100 dark:bg-teal-900/30 flex items-center justify-center mr-4">
                                 <ShieldCheck className="w-6 h-6 text-primary" />
                             </div>
                             <div>
-                                <p className="text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wide">System Health</p>
-                                <p className="text-2xl font-bold text-slate-800 dark:text-white">99.9%</p>
+                                <p className="text-[11px] font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wide">System Health</p>
+                                <p className="text-2xl font-bold text-slate-900 dark:text-white">99.9%</p>
                             </div>
                         </div>
                     </div>

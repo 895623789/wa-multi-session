@@ -270,7 +270,8 @@ export default function NeuralAdminPage() {
                 formData.append('history', JSON.stringify(chatHistory));
             }
 
-            const res = await fetch("http://localhost:5000/admin/chat", { method: "POST", body: formData });
+            const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+            const res = await fetch(`${baseUrl}/admin/chat`, { method: "POST", body: formData });
             const data = await res.json();
 
             const aiMsg: Message = {
@@ -287,8 +288,8 @@ export default function NeuralAdminPage() {
             saveStateToLocal(activeSessionId, updatedMsgs, "New Chat");
 
         } catch (err: any) {
-            const errorMsg = err?.message || "Connection to Neural Core failed.";
-            const failMsgs = [...newMsgs, { role: 'ai', text: `❌ ${errorMsg}` } as Message];
+            const errorMsg = "Unable to reach Neural Core. Please ensure the backend is running.";
+            const failMsgs = [...newMsgs, { role: 'ai', text: `❌ **Connection Failed**\n\n${errorMsg}` } as Message];
             setMessages(failMsgs);
             saveStateToLocal(activeSessionId, failMsgs, "New Chat");
         } finally {
@@ -301,7 +302,8 @@ export default function NeuralAdminPage() {
         if (!file) return;
         const formData = new FormData();
         formData.append('file', file);
-        await fetch("http://localhost:5000/admin/upload-to-storage", { method: "POST", body: formData });
+        const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+        await fetch(`${baseUrl}/admin/upload-to-storage`, { method: "POST", body: formData });
     };
 
     return (

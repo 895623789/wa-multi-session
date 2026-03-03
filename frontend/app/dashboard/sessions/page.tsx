@@ -135,18 +135,29 @@ export default function SessionsPage() {
     const [modalSession, setModalSession] = useState<string | null>(null);
     const [disconnecting, setDisconnecting] = useState(false);
 
+    // Fetch error state
+    const [fetchError, setFetchError] = useState<string | null>(null);
+
     // Display name: strip uid prefix
     const displayName = (id: string) => id.startsWith(uid + '_') ? id.slice(uid.length + 1) : id;
 
     const fetchSessions = useCallback(async () => {
         if (!uid) return;
+        setFetchError(null);
         try {
             const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
             const res = await fetch(`${baseUrl}/session/list?uid=${uid}`);
+
+            if (!res.ok) {
+                const errorData = await res.json().catch(() => ({}));
+                throw new Error(errorData.error || `Server returned ${res.status}`);
+            }
+
             const data = await res.json();
             setSessions(data.sessions || []);
-        } catch (e) {
-            console.error(e);
+        } catch (e: any) {
+            console.error("Fetch Sessions Error:", e);
+            setFetchError("Unable to reach the server. Please ensure the backend is running on port 5000.");
         } finally {
             setLoading(false);
         }
@@ -237,11 +248,10 @@ export default function SessionsPage() {
         }, 2000);
 
         return () => clearInterval(interval);
-    }, [isPolling, newSessionId, fetchSessions]);
+    }, [isPolling, fullSessionId, fetchSessions]);
 
     return (
         <>
-            {/* ── Disconnect Modal ── */}
             {modalSession && (
                 <DisconnectModal
                     sessionId={modalSession}
@@ -264,6 +274,22 @@ export default function SessionsPage() {
                                 <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
                             </button>
                         </div>
+
+                        {fetchError && (
+                            <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-2xl flex items-start gap-3 animate-in fade-in slide-in-from-top-2">
+                                <AlertTriangle className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
+                                <div>
+                                    <h3 className="text-sm font-bold text-red-800">Connection Error</h3>
+                                    <p className="text-xs text-red-600 mt-1">{fetchError}</p>
+                                    <button
+                                        onClick={fetchSessions}
+                                        className="mt-2 text-xs font-bold text-red-700 hover:underline flex items-center gap-1"
+                                    >
+                                        <RefreshCw className="w-3 h-3" /> Try Again
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
                         {loading ? (
                             <div className="flex items-center gap-2 text-slate-500 p-4">

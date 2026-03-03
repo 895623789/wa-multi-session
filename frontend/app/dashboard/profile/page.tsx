@@ -6,10 +6,12 @@ import { motion } from "framer-motion";
 import { User, CreditCard, HelpCircle, LogOut, ChevronRight, Settings, Sun, Moon } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import { useRouter } from "next/navigation";
 
 export default function ProfilePage() {
     const { user, userData } = useAuth();
     const { theme, toggleTheme } = useTheme();
+    const router = useRouter();
     const isDark = theme === "dark";
 
     const handleLogout = async () => {
@@ -78,7 +80,7 @@ export default function ProfilePage() {
                         <div className="rounded-2xl overflow-hidden divide-y"
                             style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderColor: 'var(--border)' }}>
 
-                            <button className="w-full flex items-center justify-between p-4 transition-colors group"
+                            <button onClick={() => router.push('/dashboard/profile/edit')} className="w-full flex items-center justify-between p-4 transition-colors group"
                                 style={{ '--hover-bg': 'var(--bg-hover)' } as React.CSSProperties}
                                 onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
                                 onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
@@ -92,7 +94,7 @@ export default function ProfilePage() {
                                 <ChevronRight className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
                             </button>
 
-                            <button className="w-full flex items-center justify-between p-4 transition-colors group"
+                            <button onClick={() => router.push('/dashboard/profile/subscription')} className="w-full flex items-center justify-between p-4 transition-colors group"
                                 onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
                                 onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                                 <div className="flex items-center gap-3">
@@ -111,7 +113,7 @@ export default function ProfilePage() {
                                 </div>
                             </button>
 
-                            <button className="w-full flex items-center justify-between p-4 transition-colors group"
+                            <button onClick={() => router.push('/dashboard/profile/preferences')} className="w-full flex items-center justify-between p-4 transition-colors group"
                                 onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
                                 onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                                 <div className="flex items-center gap-3">
@@ -119,7 +121,7 @@ export default function ProfilePage() {
                                         style={{ background: 'var(--bg-subtle)' }}>
                                         <Settings className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
                                     </div>
-                                    <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Preferences</span>
+                                    <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Settings</span>
                                 </div>
                                 <ChevronRight className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
                             </button>
@@ -188,7 +190,7 @@ export default function ProfilePage() {
                             style={{ color: 'var(--text-muted)' }}>Support</h3>
                         <div className="rounded-2xl overflow-hidden"
                             style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-                            <button className="w-full flex items-center justify-between p-4 transition-colors"
+                            <button onClick={() => router.push('/dashboard/profile/helpline')} className="w-full flex items-center justify-between p-4 transition-colors"
                                 onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
                                 onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                                 <div className="flex items-center gap-3">
