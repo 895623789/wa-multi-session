@@ -15,9 +15,14 @@ export interface UserData {
     teamSize: string;
     role: string;
     location: string;
+    photoURL?: string; // Newly added
     onboardingComplete: boolean;
     plan: string;
     sessions: string[];
+    stats?: {
+        messagesUsed?: number;
+        aiRepliesUsed?: number;
+    };
     createdAt: any;
     updatedAt: any;
 }

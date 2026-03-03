@@ -113,9 +113,9 @@ export default function HelplinePage() {
                 {/* Contact Cards */}
                 <div className="grid grid-cols-3 gap-3">
                     {[
-                        { icon: Phone, label: "Call", sub: "+91 98765 43210", color: "#10b981", bg: "rgba(16,185,129,0.1)", href: "tel:+919876543210" },
+                        { icon: Phone, label: "Call", sub: "+91 8302806913", color: "#10b981", bg: "rgba(16,185,129,0.1)", href: "tel:+918302806913" },
                         { icon: Mail, label: "Email", sub: "support@bulkreply.io", color: "#4f46e5", bg: "rgba(79,70,229,0.1)", href: "mailto:support@bulkreply.io" },
-                        { icon: MessageSquare, label: "WhatsApp", sub: "Chat Support", color: "#25D366", bg: "rgba(37,211,102,0.1)", href: "https://wa.me/919876543210" },
+                        { icon: MessageSquare, label: "WhatsApp", sub: "Chat Support", color: "#25D366", bg: "rgba(37,211,102,0.1)", href: "https://wa.me/918302806913" },
                     ].map(({ icon: Icon, label, sub, color, bg, href }) => (
                         <a key={label} href={href} target="_blank" rel="noreferrer"
                             className="rounded-2xl p-4 flex flex-col items-center gap-2 text-center transition-all hover:scale-105 active:scale-95"

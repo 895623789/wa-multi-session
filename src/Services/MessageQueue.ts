@@ -1,4 +1,4 @@
-import { Firestore, getFirestore } from "firebase-admin/firestore";
+import { Firestore, getFirestore, FieldValue } from "firebase-admin/firestore";
 import { Whatsapp } from "../Whatsapp/Whatsapp";
 
 const COLLECTION = "message_queue";
@@ -97,7 +97,18 @@ export class MessageQueue {
             });
 
             // 5. Success
-            await docRef.update({ status: "sent" });
+            await docRef.update({ status: "sent", sentAt: new Date() });
+
+            // 6. TRACK COUNT ONLY (Do NOT store actual message)
+            // Need to find which uid owns this sessionId
+            const uid = task.sessionId.split('_')[0]; // assuming format uid_device1
+            if (uid && uid.length > 5) { // quick sanity check
+                await this.db.collection('users').doc(uid).update({
+                    'stats.messagesUsed': FieldValue.increment(1),
+                    updatedAt: FieldValue.serverTimestamp()
+                }).catch(err => console.error(`[Stats Update Error] UID: ${uid}`, err));
+            }
+
             console.log(`✅ Queue: Sent message to ${task.to}`);
 
         } catch (error: any) {

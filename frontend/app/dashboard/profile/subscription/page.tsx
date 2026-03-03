@@ -7,6 +7,12 @@ import { ArrowLeft, Check, Zap, Crown, Building2, Loader2, MessageSquare, Users,
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
+declare global {
+    interface Window {
+        Razorpay: any;
+    }
+}
+
 const PLANS = [
     {
         id: "free",
@@ -75,22 +81,82 @@ export default function SubscriptionPage() {
 
     const currentPlan = (userData?.plan || "free").toLowerCase();
 
+    const loadRazorpay = () => {
+        return new Promise((resolve) => {
+            if (window.Razorpay) {
+                resolve(true);
+                return;
+            }
+            const script = document.createElement("script");
+            script.src = "https://checkout.razorpay.com/v1/checkout.js";
+            script.onload = () => resolve(true);
+            script.onerror = () => resolve(false);
+            document.body.appendChild(script);
+        });
+    };
+
     const handleUpgrade = async (planId: string) => {
         if (!user || planId === currentPlan) return;
         setUpgrading(planId);
         setSuccess("");
+
         try {
-            // In production: call your payment gateway (Razorpay, Stripe etc.)
-            // For now we update Firestore directly (demo)
-            await updateDoc(doc(db, "users", user.uid), {
-                plan: planId.charAt(0).toUpperCase() + planId.slice(1),
-                planUpdatedAt: serverTimestamp(),
+            // Razorpay load script
+            const res = await loadRazorpay();
+            if (!res) {
+                alert("Razorpay SDK failed to load. Are you online?");
+                setUpgrading(null);
+                return;
+            }
+
+            // Dummy options for Razorpay checkout (Client-side only demo)
+            // In real app, create orderId from backend first!
+            const priceOptions: any = { free: 0, starter: 99900, pro: 249900 };
+
+            const options = {
+                key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_dummykey123456", // Put real key in .env
+                amount: priceOptions[planId],
+                currency: "INR",
+                name: "BulkReply.io",
+                description: `Upgrade to ${planId.toUpperCase()} Plan`,
+                image: "https://your-logo-url.com/logo.png",
+                handler: async function (response: any) {
+                    // Success callback
+                    try {
+                        await updateDoc(doc(db, "users", user.uid), {
+                            plan: planId.charAt(0).toUpperCase() + planId.slice(1),
+                            planUpdatedAt: serverTimestamp(),
+                        });
+                        setSuccess(`Payment Successful! Upgraded to ${planId.toUpperCase()}!`);
+                        setTimeout(() => setSuccess(""), 4000);
+                    } catch (err) {
+                        console.error("Firestore update error:", err);
+                    }
+                    setUpgrading(null);
+                },
+                prefill: {
+                    name: userData?.displayName || "User",
+                    email: user.email,
+                    contact: userData?.phone || "9999999999",
+                },
+                theme: { color: "#4f46e5" },
+                modal: {
+                    ondismiss: function () {
+                        setUpgrading(null);
+                    },
+                },
+            };
+
+            const rzp = new window.Razorpay(options);
+
+            rzp.on('payment.failed', function (response: any) {
+                alert(`Payment failed: ${response.error.description}`);
+                setUpgrading(null);
             });
-            setSuccess(`Plan ${planId} में upgrade हो गया!`);
-            setTimeout(() => setSuccess(""), 4000);
+
+            rzp.open();
         } catch (err) {
             console.error("Upgrade error:", err);
-        } finally {
             setUpgrading(null);
         }
     };
@@ -104,10 +170,10 @@ export default function SubscriptionPage() {
     }
 
     const stats = [
-        { icon: MessageSquare, label: "Messages Used", value: "—" },
-        { icon: Users, label: "Active Sessions", value: (userData.sessions || []).length.toString() },
-        { icon: Bot, label: "AI Replies Sent", value: "—" },
-        { icon: Shield, label: "Current Plan", value: userData.plan || "Free" },
+        { icon: MessageSquare, label: "Messages Used", value: (userData?.stats?.messagesUsed || 0).toLocaleString() },
+        { icon: Users, label: "Active Sessions", value: (userData?.sessions || []).length.toString() },
+        { icon: Bot, label: "AI Replies Sent", value: (userData?.stats?.aiRepliesUsed || 0).toLocaleString() },
+        { icon: Shield, label: "Current Plan", value: userData?.plan || "Free" },
     ];
 
     return (
@@ -134,7 +200,7 @@ export default function SubscriptionPage() {
                     <div className="absolute -right-6 -top-6 w-28 h-28 rounded-full opacity-20 bg-white" />
                     <div className="absolute -right-2 -bottom-8 w-20 h-20 rounded-full opacity-10 bg-white" />
                     <p className="text-indigo-200 text-xs font-bold uppercase tracking-widest mb-1">Current Plan</p>
-                    <p className="text-white text-2xl font-extrabold font-outfit">{userData.plan || "Free"}</p>
+                    <p className="text-white text-2xl font-extrabold font-outfit">{userData?.plan || "Free"}</p>
                     <p className="text-indigo-200 text-xs mt-1">Active since account creation</p>
                 </div>
 

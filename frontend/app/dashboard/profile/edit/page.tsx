@@ -1,17 +1,20 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Save, Camera, Loader2, CheckCircle2 } from "lucide-react";
 import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
 import { updateProfile } from "firebase/auth";
-import { db, auth } from "@/lib/firebase";
+import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
+import { db, auth, storage } from "@/lib/firebase";
 
 export default function EditProfilePage() {
     const { user, userData } = useAuth();
     const router = useRouter();
+    const fileInputRef = useRef<HTMLInputElement>(null);
     const [saving, setSaving] = useState(false);
+    const [uploading, setUploading] = useState(false);
     const [toast, setToast] = useState(false);
     const [error, setError] = useState("");
 
@@ -23,10 +26,55 @@ export default function EditProfilePage() {
         teamSize: userData?.teamSize || "",
         role: userData?.role || "",
         location: userData?.location || "",
+        photoURL: userData?.photoURL || user?.photoURL || "",
     });
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
         setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    };
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file || !user) return;
+
+        if (file.size > 2 * 1024 * 1024) {
+            setError("Picture size must be less than 2MB.");
+            return;
+        }
+
+        setUploading(true);
+        setError("");
+
+        try {
+            const ext = file.name.split('.').pop();
+            const storageRef = ref(storage, `avatars/${user.uid}_${Date.now()}.${ext}`);
+            const uploadTask = uploadBytesResumable(storageRef, file);
+
+            uploadTask.on('state_changed',
+                (snapshot) => { },
+                (err) => {
+                    setError(err.message);
+                    setUploading(false);
+                },
+                async () => {
+                    const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+                    setForm(prev => ({ ...prev, photoURL: downloadURL }));
+
+                    if (auth.currentUser) {
+                        await updateProfile(auth.currentUser, { photoURL: downloadURL });
+                    }
+                    await updateDoc(doc(db, "users", user.uid), {
+                        photoURL: downloadURL,
+                        updatedAt: serverTimestamp()
+                    });
+
+                    setUploading(false);
+                }
+            );
+        } catch (err: any) {
+            setError(err.message || "Upload failed");
+            setUploading(false);
+        }
     };
 
     const handleSave = async () => {
@@ -126,13 +174,29 @@ export default function EditProfilePage() {
                 {/* Avatar Card */}
                 <div className="rounded-2xl p-6 flex items-center gap-5 shadow-sm"
                     style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-                    <div className="relative">
-                        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-2xl font-bold font-outfit shadow-lg shrink-0">
-                            {initials}
+                    <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-2xl font-bold font-outfit shadow-lg shrink-0 overflow-hidden relative">
+                            {form.photoURL ? (
+                                <img src={form.photoURL} alt="Avatar" className="w-full h-full object-cover" />
+                            ) : (
+                                initials
+                            )}
+                            {uploading && (
+                                <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                    <Loader2 className="w-6 h-6 text-white animate-spin" />
+                                </div>
+                            )}
                         </div>
-                        <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center shadow">
+                        <div className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-indigo-600 flex items-center justify-center shadow transition-transform group-hover:scale-110">
                             <Camera className="w-3.5 h-3.5 text-white" />
                         </div>
+                        <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            ref={fileInputRef}
+                            onChange={handleImageUpload}
+                        />
                     </div>
                     <div>
                         <p className="text-sm font-bold" style={{ color: 'var(--text-primary)' }}>{form.displayName || "User"}</p>

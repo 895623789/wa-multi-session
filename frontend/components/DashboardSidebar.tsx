@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, MessageCircle, Send, Settings, LogOut, User, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { LayoutDashboard, MessageCircle, Send, Settings, LogOut, User, PanelLeftClose, PanelLeftOpen, Bot } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import Image from "next/image";
@@ -12,7 +12,7 @@ export default function DashboardSidebar() {
 
     const links = [
         { name: "Home", href: "/dashboard", icon: LayoutDashboard },
-        { name: "Sessions", href: "/dashboard/sessions", icon: MessageCircle },
+        { name: "Agents", href: "/dashboard/agents", icon: Bot },
         { name: "Campaigns", href: "/dashboard/campaigns", icon: Send },
         { name: "Neural AI", href: "/dashboard/ai", icon: Settings },
         { name: "Profile", href: "/dashboard/profile", icon: User },
