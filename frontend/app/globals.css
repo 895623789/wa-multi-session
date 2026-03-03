@@ -99,3 +99,25 @@ body {
   transition-duration: 0.2s;
   transition-timing-function: ease;
 }
+
+/* ── Custom Scrollbar for Sidebar ── */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(79, 70, 229, 0.1);
+  border-radius: 20px;
+}
+
+.custom-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: rgba(79, 70, 229, 0.3);
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}

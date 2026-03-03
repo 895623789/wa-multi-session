@@ -14,6 +14,7 @@ export interface UserData {
     industry: string;
     teamSize: string;
     role: string;
+    owner?: string | boolean;
     location: string;
     photoURL?: string; // Newly added
     onboardingComplete: boolean;

@@ -163,7 +163,14 @@ const whatsapp = new Whatsapp({
 
     // 5. Generate AI Reply
     const isOwner = ownerNumber && cleanJid === ownerNumber;
-    const aiResponse = await generateAutoReply(text, !!isOwner);
+
+    // Fetch custom instructions and business info for THIS session
+    const [instructions, businessInfo] = await Promise.all([
+      (whatsapp as any).adapter.readData(msg.sessionId, 'instructions'),
+      (whatsapp as any).adapter.readData(msg.sessionId, 'businessInfo')
+    ]);
+
+    const aiResponse = await generateAutoReply(text, !!isOwner, instructions, businessInfo);
 
     // 6. Send reply if AI responded
     if (aiResponse) {
@@ -216,7 +223,7 @@ queue.startWorker().catch(err => console.error("Queue Start Error:", err));
  * Body: { "sessionId": "my-user-1" }
  */
 app.post("/session/start", async (req, res) => {
-  const { sessionId, uid, ownerNumber } = req.body;
+  const { sessionId, uid, ownerNumber, instructions, businessInfo } = req.body;
   if (!sessionId) return res.status(400).json({ error: "sessionId is required" });
   // UID ownership: if uid provided, sessionId MUST start with uid_
   if (uid && !sessionId.startsWith(`${uid}_`)) {
@@ -244,6 +251,10 @@ app.post("/session/start", async (req, res) => {
         sessionStatuses.set(sessionId, { status: 'scan_qr', qr });
       }
     });
+
+    // Save custom AI personality data
+    if (instructions) await (whatsapp as any).adapter.saveData(sessionId, 'instructions', instructions);
+    if (businessInfo) await (whatsapp as any).adapter.saveData(sessionId, 'businessInfo', businessInfo);
     res.json({
       message: `Session ${sessionId} started.`,
       instruction: "Please scan the QR code displayed on the page."

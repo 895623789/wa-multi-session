@@ -11,8 +11,10 @@ import {
     MessageSquare,
     Smartphone,
     AlertCircle,
+    ShieldAlert,
     Trash2,
     Power,
+    Clock,
     ExternalLink,
     ChevronRight,
     ArrowUpRight,
@@ -21,14 +23,37 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
-const mockUserData = {
+interface UserProfile {
+    uid: string;
+    name: string;
+    email: string;
+    phone: string;
+    role: string;
+    owner?: string | boolean;
+    company: string;
+    industry: string;
+    status: string;
+    onboardingComplete: boolean;
+    plan: string;
+    planExpiry: string;
+    createdAt: string;
+    sessions: string[];
+    stats: {
+        messagesUsed: number;
+        aiRepliesUsed: number;
+        totalContacts: number;
+    };
+}
+
+const mockUserData: UserProfile = {
     uid: "user1",
     name: "Rahul Sharma",
     email: "rahul@example.com",
     phone: "+91 98765 43210",
     role: "user",
+    owner: "true",
     company: "Rahul Tech Solutions",
     industry: "E-commerce",
     status: "Active",
@@ -52,6 +77,10 @@ const subscriptionHistory = [
 export default function UserDetailPage() {
     const params = useParams();
     const uid = params?.uid as string;
+
+    const [showDeleteModal, setShowDeleteModal] = React.useState(false);
+    const [showDeleteRoleModal, setShowDeleteRoleModal] = React.useState(false);
+    const [isSuspending, setIsSuspending] = React.useState(false);
 
     return (
         <div className="space-y-8">
@@ -220,20 +249,59 @@ export default function UserDetailPage() {
 
                     {/* Dangerous Actions */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {/* Role Management Card */}
-                        <div className="p-6 rounded-[28px] border border-indigo-100 bg-indigo-50/20 shadow-sm flex items-center justify-between group md:col-span-2">
-                            <div className="flex items-center gap-4">
-                                <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center transition-colors">
-                                    <ShieldCheck size={22} />
+                        {/* Access Control Card */}
+                        <div className="p-8 rounded-[40px] border border-indigo-100 bg-white shadow-xl shadow-indigo-50/50 flex flex-col md:flex-row md:items-center justify-between gap-6 group md:col-span-2 relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-50/50 rounded-full -mr-16 -mt-16 blur-3xl group-hover:bg-indigo-100/50 transition-colors"></div>
+
+                            <div className="flex items-center gap-5 relative z-10">
+                                <div className={`w-16 h-16 rounded-[24px] flex items-center justify-center transition-all duration-500 ${String(mockUserData.owner) === 'true' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' :
+                                    String(mockUserData.owner) === 'false' ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-400'
+                                    }`}>
+                                    <ShieldCheck size={32} />
                                 </div>
                                 <div>
-                                    <p className="text-sm font-black text-slate-900">Role Management</p>
-                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter">Current Role: <span className="text-indigo-600">{mockUserData.role}</span></p>
+                                    <h3 className="text-xl font-black text-slate-900 font-outfit tracking-tight">SaaS Admin Access</h3>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <div className={`w-2 h-2 rounded-full animate-pulse ${String(mockUserData.owner) === 'true' ? 'bg-emerald-500' :
+                                            String(mockUserData.owner) === 'false' ? 'bg-amber-500' : 'bg-slate-300'
+                                            }`}></div>
+                                        <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
+                                            Status: <span className={
+                                                String(mockUserData.owner) === 'true' ? 'text-emerald-600' :
+                                                    String(mockUserData.owner) === 'false' ? 'text-amber-600' : 'text-slate-500'
+                                            }>
+                                                {String(mockUserData.owner) === 'true' ? 'Active Owner' :
+                                                    String(mockUserData.owner) === 'false' ? 'Access Suspended' : 'No Admin Access'}
+                                            </span>
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
-                            <button className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-black hover:bg-indigo-700 transition-all shadow-md active:scale-95">
-                                {mockUserData.role === 'owner' ? 'Demote to User' : 'Promote to Owner'}
-                            </button>
+
+                            <div className="flex flex-wrap items-center gap-3 relative z-10">
+                                {mockUserData.owner ? (
+                                    <>
+                                        <button
+                                            className={`px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 ${String(mockUserData.owner) === 'true'
+                                                ? 'bg-amber-50 text-amber-600 border border-amber-100 hover:bg-amber-100'
+                                                : 'bg-indigo-600 text-white shadow-lg shadow-indigo-200 hover:bg-indigo-700'
+                                                }`}
+                                        >
+                                            {mockUserData.owner === 'true' ? 'Suspend Access' : 'Activate Access'}
+                                        </button>
+                                        <button
+                                            onClick={() => setShowDeleteRoleModal(true)}
+                                            className="px-6 py-3 bg-white border border-rose-100 text-rose-500 rounded-2xl text-xs font-black uppercase tracking-widest hover:bg-rose-50 transition-all active:scale-95"
+                                        >
+                                            Delete Role
+                                        </button>
+                                    </>
+                                ) : (
+                                    <button className="px-10 py-4 bg-indigo-600 text-white rounded-[24px] text-xs font-black uppercase tracking-widest shadow-xl shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95 flex items-center gap-2">
+                                        Grant Owner Access
+                                    </button>
+                                )}
+                            </div>
                         </div>
 
                         <div className="p-6 rounded-[28px] border border-slate-100 bg-white shadow-sm flex items-center justify-between group">
@@ -267,6 +335,50 @@ export default function UserDetailPage() {
                     </div>
                 </div>
             </div>
+            {/* Delete Account Modal */}
+            <AnimatePresence>
+                {showDeleteModal && (
+                    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-[110] flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                            className="bg-white rounded-[40px] w-full max-w-lg shadow-2xl overflow-hidden border border-slate-100 p-10 text-center"
+                        >
+                            <div className="w-20 h-20 bg-rose-50 text-rose-500 rounded-3xl flex items-center justify-center mx-auto mb-6">
+                                <AlertCircle size={40} />
+                            </div>
+                            <h2 className="text-2xl font-black text-slate-900 font-outfit mb-2">Delete User Account?</h2>
+                            <p className="text-sm text-slate-500 font-medium mb-10">This action is permanent. All data, bots, and campaigns for <b>{mockUserData.name}</b> will be deleted forever.</p>
+                            <div className="flex flex-col gap-3">
+                                <button className="w-full py-4 bg-rose-600 text-white rounded-[24px] text-sm font-black uppercase tracking-widest shadow-xl shadow-rose-100 hover:bg-rose-700 transition-all active:scale-95">Confirm Immediate Deletion</button>
+                                <button onClick={() => setShowDeleteModal(false)} className="w-full py-4 text-slate-400 font-black text-xs uppercase tracking-widest hover:text-slate-600 transition-all">Cancel</button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+
+                {showDeleteRoleModal && (
+                    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-md z-[110] flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                            className="bg-white rounded-[40px] w-full max-w-lg shadow-2xl overflow-hidden border border-slate-100 p-10 text-center"
+                        >
+                            <div className="w-20 h-20 bg-indigo-50 text-indigo-500 rounded-[28px] flex items-center justify-center mx-auto mb-6">
+                                <ShieldCheck size={40} />
+                            </div>
+                            <h2 className="text-2xl font-black text-slate-900 font-outfit mb-2">Remove Owner Role?</h2>
+                            <p className="text-sm text-slate-500 font-medium mb-10">This will completely delete the <b>owner</b> field from the database for this user. They will lose all access to the Owner Panel.</p>
+                            <div className="flex flex-col gap-3">
+                                <button className="w-full py-4 bg-slate-900 text-white rounded-[24px] text-sm font-black uppercase tracking-widest shadow-xl shadow-slate-200 hover:bg-slate-800 transition-all active:scale-95 text-indigo-400">Confirm Field Deletion</button>
+                                <button onClick={() => setShowDeleteRoleModal(false)} className="w-full py-4 text-slate-400 font-black text-xs uppercase tracking-widest hover:text-slate-600 transition-all">Cancel</button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

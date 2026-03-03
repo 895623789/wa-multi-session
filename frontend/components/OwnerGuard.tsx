@@ -15,13 +15,13 @@ export default function OwnerGuard({ children }: OwnerGuardProps) {
         if (!loading) {
             if (!user) {
                 router.replace("/login");
-            } else if (userData && userData.role !== "owner") {
+            } else if (userData && String(userData.owner) !== "true") {
                 router.replace("/dashboard");
             }
         }
     }, [user, userData, loading, router]);
 
-    if (loading || !user || !userData || userData.role !== "owner") {
+    if (loading || !user || !userData || String(userData.owner) !== "true") {
         return (
             <div className="min-h-screen flex items-center justify-center bg-[#F9FAFB]">
                 <div className="flex flex-col items-center gap-3">
