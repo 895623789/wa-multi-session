@@ -53,20 +53,20 @@ export default function PricingSection() {
     ];
 
     return (
-        <section id="pricing" className="py-24 bg-white relative">
+        <section id="pricing" className="py-16 bg-white relative">
             <div className="container mx-auto max-w-7xl px-4 sm:px-6">
-                <div className="text-center max-w-3xl mx-auto mb-16">
-                    <h2 className="text-4xl font-bold text-slate-900 mb-4 font-outfit">Simple, transparent pricing</h2>
-                    <p className="text-lg text-slate-500">Pick the plan that fits your growth. No hidden limits.</p>
+                <div className="text-center max-w-3xl mx-auto mb-10">
+                    <h2 className="text-3xl font-bold text-slate-900 mb-3 font-outfit">Simple, transparent pricing</h2>
+                    <p className="text-base text-slate-500">Pick the plan that fits your growth. No hidden limits.</p>
                 </div>
 
-                <div className="grid md:grid-cols-3 gap-8 items-center max-w-6xl mx-auto">
+                <div className="grid md:grid-cols-3 gap-6 items-center max-w-6xl mx-auto">
                     {plans.map((plan, idx) => (
                         <div
                             key={idx}
-                            className={`rounded-3xl p-8 relative flex flex-col h-full bg-white border ${plan.highlight
-                                    ? "border-blue-500 shadow-xl shadow-blue-500/10 md:-translate-y-4"
-                                    : "border-slate-200 shadow-sm"
+                            className={`rounded-3xl p-6 relative flex flex-col h-full bg-white border ${plan.highlight
+                                ? "border-blue-500 shadow-xl shadow-blue-500/10 md:-translate-y-4"
+                                : "border-slate-200 shadow-sm"
                                 }`}
                         >
                             {plan.highlight && (
@@ -75,33 +75,33 @@ export default function PricingSection() {
                                 </div>
                             )}
 
-                            <div className="mb-6">
-                                <h3 className="text-2xl font-bold text-slate-900 font-outfit mb-2">{plan.name}</h3>
-                                <p className="text-slate-500 text-sm h-10">{plan.desc}</p>
+                            <div className="mb-4">
+                                <h3 className="text-xl font-bold text-slate-900 font-outfit mb-1">{plan.name}</h3>
+                                <p className="text-slate-500 text-xs h-8">{plan.desc}</p>
                             </div>
 
-                            <div className="mb-8 flex items-baseline gap-1">
-                                <span className="text-5xl font-extrabold text-slate-900 font-outfit">{plan.price}</span>
-                                <span className="text-slate-500 font-medium">{plan.period}</span>
+                            <div className="mb-6 flex items-baseline gap-1">
+                                <span className="text-4xl font-extrabold text-slate-900 font-outfit">{plan.price}</span>
+                                <span className="text-slate-500 text-sm font-medium">{plan.period}</span>
                             </div>
 
-                            <div className="mb-8 flex-grow">
-                                <ul className="space-y-4">
+                            <div className="mb-6 flex-grow">
+                                <ul className="space-y-3">
                                     {plan.features.map((feat, fIdx) => (
                                         <li key={fIdx} className="flex items-center gap-3">
                                             <div className={`p-0.5 rounded-full ${plan.highlight ? "bg-blue-100 text-blue-600" : "bg-slate-100 text-slate-500"}`}>
-                                                <Check className="w-3.5 h-3.5" strokeWidth={3} />
+                                                <Check className="w-3 h-3" strokeWidth={3} />
                                             </div>
-                                            <span className="text-slate-600 text-sm">{feat}</span>
+                                            <span className="text-slate-600 text-xs">{feat}</span>
                                         </li>
                                     ))}
                                 </ul>
                             </div>
 
                             <button
-                                className={`w-full py-3.5 rounded-xl font-medium transition-all ${plan.highlight
-                                        ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20"
-                                        : "bg-slate-50 hover:bg-slate-100 text-slate-900 border border-slate-200"
+                                className={`w-full py-3 rounded-xl font-medium transition-all text-sm ${plan.highlight
+                                    ? "bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-500/20"
+                                    : "bg-slate-50 hover:bg-slate-100 text-slate-900 border border-slate-200"
                                     }`}
                             >
                                 {plan.cta}

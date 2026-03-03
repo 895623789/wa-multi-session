@@ -51,12 +51,12 @@ export default function CampaignsPage() {
     };
 
     return (
-        <div className="grid lg:grid-cols-2 gap-8">
+        <div className="grid lg:grid-cols-2 gap-6 p-3 lg:p-4">
             {/* Campaign Form */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 md:p-8">
-                <div className="mb-6">
-                    <h2 className="text-xl font-bold text-slate-900 font-outfit">Launch Campaign</h2>
-                    <p className="text-sm text-slate-500">Deploy AI-powered bulk messaging through your Anti-Ban core.</p>
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 md:p-6">
+                <div className="mb-5">
+                    <h2 className="text-lg font-bold text-slate-900 font-outfit">Launch Campaign</h2>
+                    <p className="text-xs text-slate-500">Deploy AI-powered bulk messaging through your Anti-Ban core.</p>
                 </div>
 
                 <form onSubmit={handleStartCampaign} className="space-y-6">
@@ -106,12 +106,12 @@ export default function CampaignsPage() {
                     <button
                         type="submit"
                         disabled={loading || !selectedSession}
-                        className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-medium py-3.5 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2"
+                        className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white font-medium py-3 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-sm"
                     >
                         {loading ? (
-                            <span className="flex items-center gap-2"><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Igniting Engine...</span>
+                            <span className="flex items-center gap-2"><div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div> Igniting Engine...</span>
                         ) : (
-                            <><Send className="w-4 h-4" /> Deploy to Queue</>
+                            <><Send className="w-3.5 h-3.5" /> Deploy to Queue</>
                         )}
                     </button>
                 </form>

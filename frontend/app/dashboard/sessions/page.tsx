@@ -251,7 +251,7 @@ export default function SessionsPage() {
                 />
             )}
 
-            <div className="w-full h-full p-4 lg:p-8 grid lg:grid-cols-3 gap-8">
+            <div className="w-full h-full p-3 lg:p-4 grid lg:grid-cols-3 gap-6">
                 {/* Session List */}
                 <div className="lg:col-span-2 space-y-6">
                     <div className="bg-white dark:bg-card-dark rounded-2xl shadow-soft p-6 md:p-8 glass">

@@ -3,9 +3,9 @@ import { MessageSquare, Twitter, Github, Linkedin } from "lucide-react";
 
 export default function Footer() {
     return (
-        <footer className="bg-slate-900 py-16 border-t border-slate-800">
+        <footer className="bg-slate-900 py-12 border-t border-slate-800">
             <div className="container mx-auto max-w-7xl px-4 sm:px-6">
-                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-8 mb-16">
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6 mb-12">
                     <div className="col-span-2 lg:col-span-2">
                         <div className="flex items-center gap-2 mb-6">
                             <div className="bg-blue-600 p-1.5 rounded-lg">

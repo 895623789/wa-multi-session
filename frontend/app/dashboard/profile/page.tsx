@@ -38,8 +38,8 @@ export default function ProfilePage() {
         <div className="max-w-2xl mx-auto pb-12">
 
             {/* Header */}
-            <div className="mb-8 pt-4">
-                <h1 className="text-2xl font-bold font-outfit tracking-tight" style={{ color: 'var(--text-primary)' }}>
+            <div className="mb-6 pt-2">
+                <h1 className="text-xl font-bold font-outfit tracking-tight" style={{ color: 'var(--text-primary)' }}>
                     Profile
                 </h1>
             </div>

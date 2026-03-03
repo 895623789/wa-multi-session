@@ -390,18 +390,18 @@ export default function NeuralAdminPage() {
             )}
 
             {/* ── Main Chat Header ── */}
-            <div className="h-14 border-b border-slate-200 flex items-center justify-between px-4 bg-white/90 backdrop-blur-md shrink-0 z-10 shadow-[0_2px_10px_rgba(0,0,0,0.02)] relative">
-                <div className="flex items-center gap-2.5">
+            <div className="h-12 border-b border-slate-200 flex items-center justify-between px-3 bg-white/90 backdrop-blur-md shrink-0 z-10 shadow-[0_2px_10px_rgba(0,0,0,0.02)] relative">
+                <div className="flex items-center gap-2">
                     {/* Mobile Back Button */}
-                    <Link href="/dashboard" className="p-1.5 -ml-1 text-slate-500 hover:bg-slate-100 hover:text-slate-800 rounded-lg transition-colors md:hidden">
-                        <ArrowLeft className="w-5 h-5" />
+                    <Link href="/dashboard" className="p-1 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-800 rounded-lg transition-colors md:hidden">
+                        <ArrowLeft className="w-4 h-4" />
                     </Link>
 
-                    <div className="w-9 h-9 bg-gradient-to-tr from-blue-600 to-indigo-500 rounded-xl flex items-center justify-center shadow-sm">
-                        <BrainCircuit className="w-5 h-5 text-white" />
+                    <div className="w-8 h-8 bg-gradient-to-tr from-blue-600 to-indigo-500 rounded-lg flex items-center justify-center shadow-sm">
+                        <BrainCircuit className="w-4 h-4 text-white" />
                     </div>
                     <div>
-                        <h2 className="text-sm font-bold text-slate-900 font-outfit leading-tight">Neural Admin</h2>
+                        <h2 className="text-xs font-bold text-slate-900 font-outfit leading-tight">Neural Admin</h2>
                         <p className="text-[10px] text-emerald-600 font-medium flex items-center gap-1 mt-0.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-[pulse_2s_ease-in-out_infinite]"></span>
                             Online & Ready
@@ -466,13 +466,13 @@ export default function NeuralAdminPage() {
                                     </div>
                                 )}
 
-                                <div className="p-3 md:p-4">
+                                <div className="p-2.5 md:p-3">
                                     {msg.role === 'ai' ? (
-                                        <div className="prose prose-sm max-w-none prose-slate prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-a:text-blue-600 font-manrope">
+                                        <div className="prose prose-sm max-w-none prose-slate prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-a:text-blue-600 font-manrope text-xs">
                                             <ReactMarkdown>{msg.text}</ReactMarkdown>
                                         </div>
                                     ) : (
-                                        <span className="whitespace-pre-wrap font-manrope font-medium">{msg.text.replace('[Image Generation Request] Please generate an image for the following: ', '')}</span>
+                                        <span className="whitespace-pre-wrap font-manrope font-medium text-xs">{msg.text.replace('[Image Generation Request] Please generate an image for the following: ', '')}</span>
                                     )}
 
                                     {/* Generated Image */}

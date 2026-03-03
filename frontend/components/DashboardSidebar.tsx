@@ -20,7 +20,7 @@ export default function DashboardSidebar() {
 
     return (
         <aside
-            className={`relative hidden md:flex flex-col h-full shrink-0 py-6 px-4 z-50 transition-all duration-300 ease-out overflow-visible ${isExpanded ? 'w-64 items-start' : 'w-[80px] items-center'}`}
+            className={`relative hidden md:flex flex-col h-full shrink-0 py-4 px-3 z-50 transition-all duration-300 ease-out overflow-visible ${isExpanded ? 'w-64 items-start' : 'w-[72px] items-center'}`}
             style={{
                 background: 'var(--sidebar-bg)',
                 borderRight: '1px solid var(--sidebar-border)',
@@ -31,20 +31,20 @@ export default function DashboardSidebar() {
             {/* Toggle Button */}
             <button
                 onClick={() => setIsExpanded(!isExpanded)}
-                className="absolute -right-3 top-10 w-6 h-6 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-500 hover:text-indigo-600 shadow-sm z-[60] transition-transform hover:scale-110"
+                className="absolute -right-3 top-8 w-6 h-6 bg-white border border-slate-200 rounded-full flex items-center justify-center text-slate-500 hover:text-indigo-600 shadow-sm z-[60] transition-transform hover:scale-110"
                 title={isExpanded ? "Collapse Sidebar" : "Expand Sidebar"}
             >
                 {isExpanded ? <PanelLeftClose size={14} /> : <PanelLeftOpen size={14} />}
             </button>
 
             {/* Brand/Logo */}
-            <div className={`mb-10 w-full flex items-center ${isExpanded ? 'justify-start px-1' : 'justify-center'}`}>
+            <div className={`mb-8 w-full flex items-center ${isExpanded ? 'justify-start px-1' : 'justify-center'}`}>
                 <Link href="/" className="flex items-center gap-3 w-full">
-                    <div className="flex items-center justify-center w-12 h-12 shrink-0 rounded-[18px] bg-slate-900 overflow-hidden shadow-lg hover:scale-105 transition-transform border border-amber-500/30">
-                        <Image src="/logo.png" alt="Logo" width={48} height={48} className="object-cover" />
+                    <div className="flex items-center justify-center w-10 h-10 shrink-0 rounded-[14px] bg-slate-900 overflow-hidden shadow-lg hover:scale-105 transition-transform border border-amber-500/30">
+                        <Image src="/logo.png" alt="Logo" width={40} height={40} className="object-cover" />
                     </div>
                     {isExpanded && (
-                        <span className="text-xl font-bold tracking-tight font-outfit transition-opacity duration-300 whitespace-nowrap"
+                        <span className="text-lg font-bold tracking-tight font-outfit transition-opacity duration-300 whitespace-nowrap"
                             style={{ color: 'var(--text-primary)' }}>
                             BulkReply
                         </span>
@@ -53,7 +53,7 @@ export default function DashboardSidebar() {
             </div>
 
             {/* Nav Links */}
-            <nav className={`flex-1 flex flex-col gap-2 w-full ${isExpanded ? 'items-start' : 'items-center'}`}>
+            <nav className={`flex-1 flex flex-col gap-1.5 w-full ${isExpanded ? 'items-start' : 'items-center'}`}>
                 {links.map((link) => {
                     const isActive = pathname === link.href;
                     const Icon = link.icon;

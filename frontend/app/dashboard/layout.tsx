@@ -74,7 +74,7 @@ export default function DashboardLayout({
     // Remove max-w restriction and padding if it's the admin chat route for maximum space
     const mainClasses = isAdminRoute
         ? "flex-1 overflow-hidden relative"
-        : "flex-1 overflow-y-auto overflow-x-hidden p-4 lg:p-8 relative pb-20 md:pb-8";
+        : "flex-1 overflow-y-auto overflow-x-hidden p-3 lg:p-4 relative pb-20 md:pb-8";
 
     const containerClasses = isAdminRoute
         ? "w-full h-full"

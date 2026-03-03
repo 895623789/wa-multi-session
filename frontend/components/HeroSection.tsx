@@ -15,13 +15,13 @@ export default function HeroSection() {
     }, []);
 
     return (
-        <section className="relative pt-20 pb-32 overflow-hidden">
+        <section className="relative pt-12 pb-20 overflow-hidden">
             {/* Background decoration */}
-            <div className="absolute top-0 right-0 -z-10 w-[800px] h-[800px] bg-blue-50 rounded-full blur-3xl opacity-50 translate-x-1/3 -translate-y-1/3" />
-            <div className="absolute bottom-0 left-0 -z-10 w-[600px] h-[600px] bg-sky-50 rounded-full blur-3xl opacity-50 -translate-x-1/3 translate-y-1/3" />
+            <div className="absolute top-0 right-0 -z-10 w-[600px] h-[600px] bg-blue-50 rounded-full blur-3xl opacity-50 translate-x-1/3 -translate-y-1/3" />
+            <div className="absolute bottom-0 left-0 -z-10 w-[400px] h-[400px] bg-sky-50 rounded-full blur-3xl opacity-50 -translate-x-1/3 translate-y-1/3" />
 
             <div className="container mx-auto max-w-7xl px-4 sm:px-6">
-                <div className="grid lg:grid-cols-2 gap-16 items-center">
+                <div className="grid lg:grid-cols-2 gap-12 items-center">
 
                     {/* Left Content */}
                     <motion.div
@@ -30,30 +30,30 @@ export default function HeroSection() {
                         transition={{ duration: 0.6 }}
                         className="max-w-2xl"
                     >
-                        <div className="inline-flex items-center gap-4 px-3 py-1 rounded-full bg-blue-50 border border-blue-100 mb-8">
+                        <div className="inline-flex items-center gap-3 px-3 py-1 rounded-full bg-blue-50 border border-blue-100 mb-6">
                             <div className="flex items-center gap-2 text-blue-600">
-                                <span className="flex h-2 w-2 rounded-full bg-blue-600"></span>
-                                <span className="text-xs font-semibold uppercase tracking-wider">v4.0 Live Now</span>
+                                <span className="flex h-1.5 w-1.5 rounded-full bg-blue-600"></span>
+                                <span className="text-[10px] font-semibold uppercase tracking-wider">v4.0 Live Now</span>
                             </div>
-                            <div className="w-px h-4 bg-blue-200"></div>
-                            <div className={`text-xs font-bold uppercase ${backendStatus.includes('Connected') ? 'text-green-600' : 'text-red-500'}`}>
+                            <div className="w-px h-3 bg-blue-200"></div>
+                            <div className={`text-[10px] font-bold uppercase ${backendStatus.includes('Connected') ? 'text-green-600' : 'text-red-500'}`}>
                                 API: {backendStatus}
                             </div>
                         </div>
 
-                        <h1 className="text-5xl lg:text-6xl font-extrabold tracking-tight text-slate-900 leading-[1.1] mb-6 font-outfit">
+                        <h1 className="text-4xl lg:text-5xl font-extrabold tracking-tight text-slate-900 leading-[1.1] mb-5 font-outfit">
                             Supercharge your <br />
                             <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-sky-500">
                                 WhatsApp
                             </span> Marketing
                         </h1>
 
-                        <p className="text-lg text-slate-600 mb-8 leading-relaxed">
+                        <p className="text-base text-slate-600 mb-6 leading-relaxed">
                             Automate multi-session outreach, manage campaigns effortlessly, and hit the inbox every time with our advanced anti-ban AI core.
                         </p>
 
                         <form
-                            className="flex flex-col sm:flex-row gap-3 min-w-full sm:min-w-0 max-w-md mb-6"
+                            className="flex flex-col sm:flex-row gap-3 min-w-full sm:min-w-0 max-w-md mb-5"
                             onSubmit={(e) => {
                                 e.preventDefault();
                                 window.location.href = "/signup";
@@ -62,19 +62,19 @@ export default function HeroSection() {
                             <input
                                 type="email"
                                 placeholder="Enter your work email"
-                                className="flex-1 px-4 py-3.5 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-900 shadow-sm"
+                                className="flex-1 px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-slate-900 shadow-sm text-sm"
                                 required
                                 suppressHydrationWarning
                             />
                             <button
                                 type="submit"
-                                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3.5 rounded-xl font-medium transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2 whitespace-nowrap"
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-3 rounded-xl font-medium transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2 whitespace-nowrap text-sm"
                             >
                                 Start Free Trial <ArrowRight className="w-4 h-4" />
                             </button>
                         </form>
 
-                        <div className="flex items-center gap-6 text-sm text-slate-500">
+                        <div className="flex items-center gap-6 text-xs text-slate-500">
                             <span className="flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-green-500" /> No credit card</span>
                             <span className="flex items-center gap-1.5"><CheckCircle2 className="w-4 h-4 text-green-500" /> 14-day tracking</span>
                         </div>

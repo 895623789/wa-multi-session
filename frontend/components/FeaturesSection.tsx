@@ -36,21 +36,21 @@ export default function FeaturesSection() {
     ];
 
     return (
-        <section id="features" className="py-24 bg-white relative">
+        <section id="features" className="py-16 bg-white relative">
             <div className="container mx-auto max-w-7xl px-4 sm:px-6">
-                <div className="text-center max-w-3xl mx-auto mb-16">
-                    <h2 className="text-4xl font-bold text-slate-900 mb-4 font-outfit">Everything you need to scale</h2>
-                    <p className="text-lg text-slate-500">Stop doing manual outreach. Connect your sessions and let the automation engine securely handle your marketing pipelines.</p>
+                <div className="text-center max-w-3xl mx-auto mb-10">
+                    <h2 className="text-3xl font-bold text-slate-900 mb-3 font-outfit">Everything you need to scale</h2>
+                    <p className="text-base text-slate-500">Stop doing manual outreach. Connect your sessions and let the automation engine securely handle your marketing pipelines.</p>
                 </div>
 
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {features.map((feat, idx) => (
-                        <div key={idx} className="bg-slate-50 border border-slate-100 p-8 rounded-2xl hover:shadow-xl hover:shadow-blue-500/5 transition-all duration-300 group">
-                            <div className="bg-blue-100/50 w-14 h-14 rounded-xl flex items-center justify-center mb-6 group-hover:bg-blue-600 group-hover:text-white group-hover:-translate-y-1 transition-all">
-                                {React.cloneElement(feat.icon as React.ReactElement<any>, { className: "w-6 h-6 text-blue-600 group-hover:text-white transition-colors" })}
+                        <div key={idx} className="bg-slate-50 border border-slate-100 p-6 rounded-2xl hover:shadow-xl hover:shadow-blue-500/5 transition-all duration-300 group">
+                            <div className="bg-blue-100/50 w-12 h-12 rounded-xl flex items-center justify-center mb-5 group-hover:bg-blue-600 group-hover:text-white group-hover:-translate-y-1 transition-all">
+                                {React.cloneElement(feat.icon as React.ReactElement<any>, { className: "w-5 h-5 text-blue-600 group-hover:text-white transition-colors" })}
                             </div>
-                            <h3 className="text-xl font-bold text-slate-900 mb-2 font-outfit">{feat.title}</h3>
-                            <p className="text-slate-500 leading-relaxed">{feat.description}</p>
+                            <h3 className="text-lg font-bold text-slate-900 mb-2 font-outfit">{feat.title}</h3>
+                            <p className="text-sm text-slate-500 leading-relaxed">{feat.description}</p>
                         </div>
                     ))}
                 </div>
