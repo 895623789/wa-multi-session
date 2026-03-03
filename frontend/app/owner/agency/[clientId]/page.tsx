@@ -24,6 +24,7 @@ interface AgencyClient {
     purpose: string;
     monthlyFee: number;
     startDate: any;
+    billingCycleStart?: any; // To track manual 30-day cycles
     status: 'active' | 'pending' | 'expired';
 }
 
@@ -60,11 +61,17 @@ export default function ClientManagement() {
     const [qrCode, setQrCode] = useState("");
     const [isGenerating, setIsGenerating] = useState(false);
 
+    // Billing Cycle State
+    const [daysLeft, setDaysLeft] = useState<number>(0);
+
     const countries = [
         { name: "India", code: "91", flag: "🇮🇳", digits: 10 },
         { name: "Pakistan", code: "92", flag: "🇵🇰", digits: 10 },
         { name: "USA", code: "1", flag: "🇺🇸", digits: 10 },
     ];
+
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editAgentId, setEditAgentId] = useState<string | null>(null);
 
     // Create Agent Form State
     const [newAgent, setNewAgent] = useState({
@@ -79,7 +86,19 @@ export default function ClientManagement() {
         const docRef = doc(db, "agencyClients", clientId);
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-            setClient({ id: docSnap.id, ...docSnap.data() } as AgencyClient);
+            const clientData = docSnap.data();
+            setClient({ id: docSnap.id, ...clientData } as AgencyClient);
+
+            // Calculate Billing Cycle Days Left
+            const cycleStart = clientData.billingCycleStart || clientData.startDate;
+            if (cycleStart) {
+                const startMs = cycleStart.toMillis ? cycleStart.toMillis() : (cycleStart.seconds * 1000);
+                const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+                const endMs = startMs + thirtyDaysMs;
+                const remaining = endMs - Date.now();
+                setDaysLeft(Math.ceil(remaining / (1000 * 60 * 60 * 24)));
+            }
+
             // Fetch agents associated with this client
             const agentsRef = doc(db, "agencyAgents", clientId);
             const agentsSnap = await getDoc(agentsRef);
@@ -142,6 +161,46 @@ export default function ClientManagement() {
 
         setViewState('list');
         setNewAgent({ name: "", role: "Sales Assistant", businessInfo: "", instructions: "" });
+    };
+
+    const handleEditClick = (agent: AgentConfig) => {
+        setNewAgent({
+            name: agent.name,
+            role: agent.role || "Sales Assistant",
+            businessInfo: agent.businessInfo || "",
+            instructions: agent.instructions || ""
+        });
+        setEditAgentId(agent.id);
+        setIsEditModalOpen(true);
+    };
+
+    const handleUpdateAgent = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editAgentId) return;
+
+        const updatedAgents = agents.map(agent => {
+            if (agent.id === editAgentId) {
+                return {
+                    ...agent,
+                    ...newAgent,
+                    updatedAt: Date.now()
+                };
+            }
+            return agent;
+        });
+
+        setAgents(updatedAgents);
+
+        try {
+            await updateDoc(doc(db, "agencyAgents", clientId), {
+                agents: updatedAgents
+            });
+            setIsEditModalOpen(false);
+            setEditAgentId(null);
+            setNewAgent({ name: "", role: "Sales Assistant", businessInfo: "", instructions: "" });
+        } catch (error) {
+            console.error("Error updating agent:", error);
+        }
     };
 
     const startAuthFlow = async (agentId: string, type: 'qr' | 'pairing' = 'qr') => {
@@ -234,6 +293,22 @@ export default function ClientManagement() {
         } catch (e) { }
     };
 
+    const handleRenewBilling = async () => {
+        if (!confirm(`Are you sure you want to renew the billing cycle for ${client?.businessName}? This will reset the tracker to 30 days.`)) return;
+
+        try {
+            const { serverTimestamp } = await import("firebase/firestore");
+            await updateDoc(doc(db, "agencyClients", clientId), {
+                billingCycleStart: serverTimestamp()
+            });
+            // Re-fetch to update calculation
+            fetchClientData();
+        } catch (error) {
+            console.error("Error renewing billing:", error);
+            alert("Failed to renew billing cycle. Check console.");
+        }
+    };
+
     if (isLoading) return <div className="p-8 animate-pulse text-indigo-600 font-black">Loading Client Environment...</div>;
     if (!client) return <div className="p-8 text-rose-600 font-bold tracking-tighter uppercase">Client Not Found</div>;
 
@@ -272,15 +347,25 @@ export default function ClientManagement() {
                                 </div>
                                 <span className="text-lg font-black text-slate-900">₹{client.monthlyFee}</span>
                             </div>
-                            <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                            <div className={`flex items-center justify-between p-4 ${daysLeft <= 3 ? 'bg-rose-50 border-rose-200' : 'bg-slate-50 border-slate-100'} rounded-2xl border`}>
                                 <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-amber-500 rounded-lg text-white shadow-lg shadow-amber-100">
+                                    <div className={`p-2 ${daysLeft <= 3 ? 'bg-rose-500 shadow-rose-100' : 'bg-amber-500 shadow-amber-100'} rounded-lg text-white shadow-lg`}>
                                         <Clock size={16} />
                                     </div>
-                                    <span className="text-xs font-black text-slate-900 uppercase">Days Left</span>
+                                    <span className={`text-xs font-black uppercase ${daysLeft <= 3 ? 'text-rose-600' : 'text-slate-900'}`}>
+                                        {daysLeft < 0 ? 'Overdue' : 'Days Left'}
+                                    </span>
                                 </div>
-                                <span className="text-lg font-black text-slate-900">22</span>
+                                <span className={`text-lg font-black ${daysLeft <= 3 ? 'text-rose-600 animate-pulse' : 'text-slate-900'}`}>
+                                    {daysLeft < 0 ? Math.abs(daysLeft) + 'd' : daysLeft}
+                                </span>
                             </div>
+                            <button
+                                onClick={handleRenewBilling}
+                                className="w-full py-3 mt-2 bg-slate-900 hover:bg-emerald-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-md flex items-center justify-center gap-2"
+                            >
+                                <RefreshCw size={14} /> Mark Paid  & Renew Cycle
+                            </button>
                         </div>
                     </div>
 
@@ -368,7 +453,11 @@ export default function ClientManagement() {
                                                 <Power size={14} /> Disconnect
                                             </button>
                                         )}
-                                        <button className="w-[44px] h-[44px] bg-slate-50 text-slate-400 rounded-2xl flex items-center justify-center hover:text-indigo-600 hover:bg-indigo-50 transition-all active:scale-90 shrink-0" title="Edit Agent Settings">
+                                        <button
+                                            onClick={() => handleEditClick(agent)}
+                                            className="w-[44px] h-[44px] bg-slate-50 text-slate-400 rounded-2xl flex items-center justify-center hover:text-indigo-600 hover:bg-indigo-50 transition-all active:scale-90 shrink-0"
+                                            title="Edit Agent Settings"
+                                        >
                                             <Edit size={16} />
                                         </button>
                                     </div>
@@ -381,12 +470,23 @@ export default function ClientManagement() {
 
             {/* Overlays / Modals */}
             <AnimatePresence>
-                {viewState === 'create' && (
+                {(viewState === 'create' || isEditModalOpen) && (
                     <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setViewState('list')} className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => {
+                                setViewState('list');
+                                setIsEditModalOpen(false);
+                            }}
+                            className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+                        />
                         <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }} className="relative w-full max-w-lg bg-white rounded-[2.5rem] p-8 shadow-2xl">
-                            <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-6">Setup New AI Agent</h2>
-                            <form onSubmit={handleCreateAgent} className="space-y-4">
+                            <h2 className="text-2xl font-black text-slate-900 tracking-tight mb-6">
+                                {isEditModalOpen ? "Edit AI Agent" : "Setup New AI Agent"}
+                            </h2>
+                            <form onSubmit={isEditModalOpen ? handleUpdateAgent : handleCreateAgent} className="space-y-4">
                                 <input
                                     required
                                     type="text"
@@ -409,7 +509,9 @@ export default function ClientManagement() {
                                     onChange={e => setNewAgent({ ...newAgent, instructions: e.target.value })}
                                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                                 />
-                                <button type="submit" className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 mt-2 transition-all active:scale-95">Deploy Agent</button>
+                                <button type="submit" className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 mt-2 transition-all active:scale-95">
+                                    {isEditModalOpen ? "Save Changes" : "Deploy Agent"}
+                                </button>
                             </form>
                         </motion.div>
                     </div>

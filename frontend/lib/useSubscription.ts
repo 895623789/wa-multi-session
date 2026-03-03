@@ -60,13 +60,15 @@ export function useSubscription() {
                 const status = sub.status || 'active';
 
                 // If no sub data exists in DB, we treat as personal active (fallback)
-                const finalSub: SubscriptionData = {
+                const finalSub: any = {
                     plan,
                     status: Date.now() > expiresAt ? 'expired' : status,
                     expiresAt,
                     startedAt: sub.startedAt?.seconds ? sub.startedAt.seconds * 1000 : Date.now(),
-                    ...PLAN_LIMITS[plan]
-                } as SubscriptionData;
+                    role: data.role,
+                    owner: data.owner,
+                    ...((data.role === 'agency' || data.role === 'admin' || data.owner === true) ? { maxSessions: 100, allowApi: true } : PLAN_LIMITS[plan])
+                };
 
                 setSubscription(finalSub);
             } else {
@@ -76,8 +78,10 @@ export function useSubscription() {
                     status: 'active',
                     expiresAt: Date.now() + (365 * 24 * 60 * 60 * 1000),
                     startedAt: Date.now(),
+                    role: 'user',
+                    owner: false,
                     ...PLAN_LIMITS['personal']
-                } as SubscriptionData);
+                } as any);
             }
             setLoading(false);
         }, (err) => {
@@ -88,7 +92,8 @@ export function useSubscription() {
         return () => unsubscribe();
     }, [user?.uid]);
 
-    const isExpired = subscription?.status === 'expired' || (subscription?.expiresAt ? Date.now() > subscription.expiresAt : false);
+    const isAgency = (subscription as any)?.role === 'agency' || (subscription as any)?.role === 'admin' || (subscription as any)?.owner === true;
+    const isExpired = !isAgency && (subscription?.status === 'expired' || (subscription?.expiresAt ? Date.now() > subscription.expiresAt : false));
     const daysLeft = subscription?.expiresAt ? Math.ceil((subscription.expiresAt - Date.now()) / (1000 * 60 * 60 * 24)) : 0;
 
     return {
@@ -96,6 +101,6 @@ export function useSubscription() {
         loading,
         isExpired,
         daysLeft,
-        isActive: !!subscription && !isExpired
+        isActive: isAgency || (!!subscription && !isExpired)
     };
 }

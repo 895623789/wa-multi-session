@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { db } from "@/lib/firebase";
-import { collection, query, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, updateDoc } from "firebase/firestore";
+import { collection, query, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, updateDoc, getDoc } from "firebase/firestore";
 import { useAuth } from "@/components/AuthProvider";
 import Link from "next/link";
 
@@ -19,6 +19,7 @@ interface AgencyClient {
     purpose: string;
     monthlyFee: number;
     startDate: any;
+    billingCycleStart?: any; // To track manual 30-day cycles
     status: 'active' | 'pending' | 'expired';
     notes: string;
 }
@@ -29,6 +30,10 @@ export default function AgencyPortal() {
     const [searchQuery, setSearchQuery] = useState("");
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean, client: AgencyClient | null, lang: 'en' | 'hi' }>({ isOpen: false, client: null, lang: 'en' });
+
+    const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+    const [editClientId, setEditClientId] = useState<string | null>(null);
 
     // Form State
     const [formData, setFormData] = useState({
@@ -50,7 +55,6 @@ export default function AgencyPortal() {
                 ...doc.data()
             })) as AgencyClient[];
             setClients(clientData);
-            setIsLoading(isLoading);
             setIsLoading(false);
         });
 
@@ -70,6 +74,36 @@ export default function AgencyPortal() {
             setFormData({ name: "", businessName: "", location: "", purpose: "", monthlyFee: 1500, notes: "" });
         } catch (error) {
             console.error("Error adding client:", error);
+        }
+    };
+
+    const handleEditClick = (client: AgencyClient) => {
+        setFormData({
+            name: client.name,
+            businessName: client.businessName,
+            location: client.location || "",
+            purpose: client.purpose || "",
+            monthlyFee: client.monthlyFee || 1500,
+            notes: client.notes || ""
+        });
+        setEditClientId(client.id);
+        setIsEditModalOpen(true);
+    };
+
+    const handleUpdateClient = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editClientId) return;
+
+        try {
+            await updateDoc(doc(db, "agencyClients", editClientId), {
+                ...formData,
+                updatedAt: serverTimestamp()
+            });
+            setIsEditModalOpen(false);
+            setEditClientId(null);
+            setFormData({ name: "", businessName: "", location: "", purpose: "", monthlyFee: 1500, notes: "" });
+        } catch (error) {
+            console.error("Error updating client:", error);
         }
     };
 
@@ -110,7 +144,10 @@ export default function AgencyPortal() {
                         />
                     </div>
                     <button
-                        onClick={() => setIsAddModalOpen(true)}
+                        onClick={() => {
+                            setFormData({ name: "", businessName: "", location: "", purpose: "", monthlyFee: 1500, notes: "" });
+                            setIsAddModalOpen(true);
+                        }}
                         className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-black flex items-center gap-2 shadow-lg shadow-indigo-200 transition-all active:scale-95 shrink-0"
                     >
                         <Plus size={18} strokeWidth={3} />
@@ -127,7 +164,12 @@ export default function AgencyPortal() {
                     ))
                 ) : filteredClients.length > 0 ? (
                     filteredClients.map((client) => (
-                        <ClientCard key={client.id} client={client} onDeleteClick={(c) => setDeleteModal({ isOpen: true, client: c, lang: 'hi' })} />
+                        <ClientCard
+                            key={client.id}
+                            client={client}
+                            onDeleteClick={(c) => setDeleteModal({ isOpen: true, client: c, lang: 'hi' })}
+                            onEditClick={(c) => handleEditClick(c)}
+                        />
                     ))
                 ) : (
                     <div className="w-full py-20 flex flex-col items-center justify-center bg-slate-50 border-2 border-dashed border-slate-200 rounded-[3rem] text-center">
@@ -194,15 +236,18 @@ export default function AgencyPortal() {
                 )}
             </AnimatePresence>
 
-            {/* Add Client Modal */}
+            {/* Add/Edit Client Modal */}
             <AnimatePresence>
-                {isAddModalOpen && (
+                {(isAddModalOpen || isEditModalOpen) && (
                     <div className="fixed inset-0 z-[500] flex items-center justify-center p-4">
                         <motion.div
                             initial={{ opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
-                            onClick={() => setIsAddModalOpen(false)}
+                            onClick={() => {
+                                setIsAddModalOpen(false);
+                                setIsEditModalOpen(false);
+                            }}
                             className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
                         />
                         <motion.div
@@ -212,18 +257,25 @@ export default function AgencyPortal() {
                             className="relative w-full max-w-lg bg-white rounded-[2.5rem] p-8 shadow-2xl overflow-hidden shadow-indigo-500/20"
                         >
                             <button
-                                onClick={() => setIsAddModalOpen(false)}
+                                onClick={() => {
+                                    setIsAddModalOpen(false);
+                                    setIsEditModalOpen(false);
+                                }}
                                 className="absolute top-6 right-6 p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-900 transition-all active:scale-95"
                             >
                                 <X size={20} strokeWidth={3} />
                             </button>
 
                             <div className="mb-6">
-                                <h2 className="text-2xl font-black text-slate-900 tracking-tight">Onboard New Client</h2>
-                                <p className="text-slate-500 text-sm font-bold">Register a service-based client to manage their automation.</p>
+                                <h2 className="text-2xl font-black text-slate-900 tracking-tight">
+                                    {isEditModalOpen ? "Edit Client Details" : "Onboard New Client"}
+                                </h2>
+                                <p className="text-slate-500 text-sm font-bold">
+                                    {isEditModalOpen ? "Update service-based client information." : "Register a service-based client to manage their automation."}
+                                </p>
                             </div>
 
-                            <form onSubmit={handleAddClient} className="space-y-4">
+                            <form onSubmit={isEditModalOpen ? handleUpdateClient : handleAddClient} className="space-y-4">
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-1.5">
                                         <label className="text-xs font-black uppercase text-slate-500 ml-1">Client Name</label>
@@ -293,7 +345,7 @@ export default function AgencyPortal() {
                                     type="submit"
                                     className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[1.5rem] font-black text-base shadow-xl shadow-indigo-200 transition-all active:scale-[0.98] mt-4"
                                 >
-                                    Confirm Registration
+                                    {isEditModalOpen ? "Save Changes" : "Confirm Registration"}
                                 </button>
                             </form>
                         </motion.div>
@@ -304,7 +356,27 @@ export default function AgencyPortal() {
     );
 }
 
-function ClientCard({ client, onDeleteClick }: { client: AgencyClient, onDeleteClick: (client: AgencyClient) => void }) {
+function ClientCard({ client, onDeleteClick, onEditClick }: { client: AgencyClient, onDeleteClick: (client: AgencyClient) => void, onEditClick: (client: AgencyClient) => void }) {
+    const [botCount, setBotCount] = useState<number | null>(null);
+
+    useEffect(() => {
+        const fetchBotCount = async () => {
+            try {
+                const agentsRef = doc(db, "agencyAgents", client.id);
+                const agentsSnap = await getDoc(agentsRef);
+                if (agentsSnap.exists()) {
+                    setBotCount(agentsSnap.data().agents?.length || 0);
+                } else {
+                    setBotCount(0);
+                }
+            } catch (err) {
+                console.error("Error fetching bot count for", client.id, err);
+                setBotCount(0);
+            }
+        };
+        fetchBotCount();
+    }, [client.id]);
+
     return (
         <motion.div
             layout
@@ -340,21 +412,42 @@ function ClientCard({ client, onDeleteClick }: { client: AgencyClient, onDeleteC
                     <span className="text-[9px] font-black uppercase text-slate-400 tracking-tighter mb-1">Bots Connected</span>
                     <div className="flex items-center gap-1.5">
                         <Bot className="text-slate-400" size={14} />
-                        <span className="text-slate-900 text-sm font-black">?</span>
+                        <span className="text-slate-900 text-sm font-black">{botCount !== null ? botCount : "..."}</span>
                     </div>
                 </div>
-                <div className="flex flex-col">
-                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-tighter mb-1">Status</span>
-                    <div className="flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
-                        <span className="text-emerald-500 text-xs font-black uppercase tracking-tight">Active</span>
-                    </div>
-                </div>
+                {/* Dynamically Computed Status Block */}
+                {(() => {
+                    const cycleStart = client.billingCycleStart || client.startDate;
+                    let daysLeftStr = 'N/A';
+                    let isWarning = false;
+                    let isOverdue = false;
+                    if (cycleStart) {
+                        const startMs = cycleStart.toMillis ? cycleStart.toMillis() : (cycleStart.seconds * 1000);
+                        const endMs = startMs + (30 * 24 * 60 * 60 * 1000);
+                        const remaining = endMs - Date.now();
+                        const days = Math.ceil(remaining / (1000 * 60 * 60 * 24));
+                        daysLeftStr = days < 0 ? `${Math.abs(days)}d Overdue` : `${days}d Left`;
+                        isOverdue = days < 0;
+                        isWarning = days <= 3 && !isOverdue;
+                    }
+                    return (
+                        <div className="flex flex-col">
+                            <span className="text-[9px] font-black uppercase text-slate-400 tracking-tighter mb-1">Billing</span>
+                            <div className="flex items-center gap-1.5">
+                                <span className={`w-2 h-2 rounded-full ${isOverdue ? 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]' : isWarning ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]'} ${isOverdue || isWarning ? 'animate-pulse' : ''}`} />
+                                <span className={`${isOverdue ? 'text-rose-600' : isWarning ? 'text-amber-600' : 'text-emerald-500'} text-xs font-black uppercase tracking-tight`}>
+                                    {daysLeftStr}
+                                </span>
+                            </div>
+                        </div>
+                    );
+                })()}
             </div>
 
             {/* Actions Block */}
             <div className="flex items-center gap-3 w-full md:w-auto justify-end shrink-0">
                 <button
+                    onClick={() => onEditClick(client)}
                     className="p-3 rounded-2xl bg-slate-50 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all active:scale-90"
                     title="Edit Client"
                 >

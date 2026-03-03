@@ -48,6 +48,11 @@ const checkSubscription = async (req: express.Request, res: express.Response, ne
 
   if (!uid) return res.status(400).json({ error: "Missing UID/SessionID identification" });
 
+  // Agency profiles bypass subscription checks for now
+  if (uid.startsWith('agency_')) {
+    return next();
+  }
+
   try {
     const db = getFirestore();
     const userDoc = await db.collection('users').doc(uid).get();
@@ -60,6 +65,12 @@ const checkSubscription = async (req: express.Request, res: express.Response, ne
     }
 
     const data = userDoc.data();
+
+    // Agency owners and platform admins bypass subscription checks (global)
+    if (data?.role === 'agency' || data?.role === 'admin' || data?.owner === true) {
+      return next();
+    }
+
     const sub = data?.subscription;
 
     if (!sub || sub.status !== 'active') {
@@ -176,13 +187,27 @@ const whatsapp = new Whatsapp({
     // --- SUBSCRIPTION CHECK FOR AI REPLIES ---
     try {
       const uidFromSession = msg.sessionId.split('_')[0]; // Format: uid_uuid
-      const userDoc = await getFirestore().collection('users').doc(uidFromSession).get();
-      const sub = userDoc.data()?.subscription;
-      const isExpired = sub?.expiresAt ? (new Date() > sub.expiresAt.toDate()) : false;
 
-      if (!sub || sub.status !== 'active' || isExpired) {
-        console.warn(`⚠️ [${msg.sessionId}] AI Reply blocked: Subscription ${sub?.status || 'missing'} (Expired: ${isExpired})`);
-        return;
+      // 1. Check if it's an agency-managed bot (starts with agency_)
+      if (uidFromSession.startsWith('agency_')) {
+        // Bypass for agency bots
+      } else {
+        // 2. Check user role and subscription for regular SaaS bots
+        const userDoc = await getFirestore().collection('users').doc(uidFromSession).get();
+        const userData = userDoc.data();
+
+        // Agency owners and platform admins bypass sub checks globally
+        if (userData?.role === 'agency' || userData?.role === 'admin' || userData?.owner === true) {
+          // Bypass...
+        } else {
+          const sub = userData?.subscription;
+          const isExpired = sub?.expiresAt ? (new Date() > sub.expiresAt.toDate()) : false;
+
+          if (!sub || sub.status !== 'active' || isExpired) {
+            console.warn(`⚠️ [${msg.sessionId}] AI Reply blocked: Subscription ${sub?.status || 'missing'} (Expired: ${isExpired})`);
+            return;
+          }
+        }
       }
     } catch (subErr) {
       console.error("AI Sub check failed:", subErr);
