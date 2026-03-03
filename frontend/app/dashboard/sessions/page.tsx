@@ -52,7 +52,7 @@ function DisconnectModal({
             {/* Modal Card */}
             <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
                 {/* Top danger bar */}
-                <div className="h-1.5 w-full bg-gradient-to-r from-red-400 via-red-500 to-rose-500" />
+                <div className="h-1.5 w-full bg-red-500" />
 
                 <div className="p-6 sm:p-8">
                     {/* Icon + Title */}
@@ -61,10 +61,10 @@ function DisconnectModal({
                             <AlertTriangle className="w-6 h-6 text-red-500" />
                         </div>
                         <div className="flex-1 min-w-0">
-                            <h2 className="text-lg font-bold text-slate-900 mb-0.5">{t.modalTitle}</h2>
-                            <p className="text-sm text-slate-500 leading-relaxed">
+                            <h2 className="text-lg font-bold text-slate-800 mb-0.5">{t.modalTitle}</h2>
+                            <p className="text-sm text-slate-600 leading-relaxed">
                                 {t.modalDesc(sessionId)}{" "}
-                                <span className="font-mono font-bold text-slate-800 bg-slate-100 px-1.5 py-0.5 rounded-lg text-xs">
+                                <span className="font-mono font-bold text-slate-900 bg-slate-100 px-1.5 py-0.5 rounded-lg text-xs">
                                     {sessionId}
                                 </span>
                                 {"?"}
@@ -73,9 +73,9 @@ function DisconnectModal({
                     </div>
 
                     {/* Warning box */}
-                    <div className="bg-amber-50 border border-amber-200 rounded-2xl px-4 py-3 mb-6 flex gap-3 items-start">
-                        <Wifi className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
-                        <p className="text-xs text-amber-800 leading-relaxed">{t.modalWarn}</p>
+                    <div className="bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3 mb-6 flex gap-3 items-start">
+                        <Wifi className="w-4 h-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                        <p className="text-xs text-amber-900 leading-relaxed font-medium">{t.modalWarn}</p>
                     </div>
 
                     {/* Action Buttons */}
@@ -83,14 +83,14 @@ function DisconnectModal({
                         <button
                             onClick={onCancel}
                             disabled={isLoading}
-                            className="flex-1 px-4 py-3 rounded-2xl border-2 border-slate-200 text-slate-700 text-sm font-semibold hover:bg-slate-50 transition-all disabled:opacity-40"
+                            className="flex-1 px-4 py-3 rounded-2xl border-2 border-slate-100 text-slate-600 text-sm font-bold hover:bg-slate-50 transition-all disabled:opacity-40"
                         >
                             {t.cancel}
                         </button>
                         <button
                             onClick={onConfirm}
                             disabled={isLoading}
-                            className="flex-1 px-4 py-3 rounded-2xl bg-red-500 hover:bg-red-600 active:bg-red-700 text-white text-sm font-semibold transition-all shadow-lg shadow-red-500/25 disabled:opacity-70 flex items-center justify-center gap-2"
+                            className="flex-1 px-4 py-3 rounded-2xl bg-red-500 hover:bg-red-600 active:bg-red-700 text-white text-sm font-bold transition-all shadow-lg shadow-red-500/25 disabled:opacity-70 flex items-center justify-center gap-2"
                         >
                             {isLoading ? (
                                 <><RefreshCw className="w-4 h-4 animate-spin" /> Disconnecting...</>
@@ -104,7 +104,7 @@ function DisconnectModal({
                     <div className="mt-4 text-center">
                         <button
                             onClick={() => setLang(lang === "en" ? "hi" : "en")}
-                            className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-blue-600 transition-colors"
+                            className="inline-flex items-center gap-1.5 text-xs text-slate-500 font-semibold hover:text-teal-600 transition-colors"
                         >
                             <Languages className="w-3.5 h-3.5" />
                             {t.switchLang}
@@ -247,14 +247,14 @@ export default function SessionsPage() {
                 />
             )}
 
-            <div className="grid lg:grid-cols-3 gap-8">
+            <div className="w-full h-full p-4 lg:p-8 grid lg:grid-cols-3 gap-8">
                 {/* Session List */}
                 <div className="lg:col-span-2 space-y-6">
-                    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 md:p-8">
+                    <div className="bg-white dark:bg-card-dark rounded-2xl shadow-soft p-6 md:p-8 glass">
                         <div className="flex items-center justify-between mb-6">
                             <div>
-                                <h2 className="text-xl font-bold text-slate-900 font-outfit">Active Sessions</h2>
-                                <p className="text-sm text-slate-500">Manage your connected WhatsApp instances.</p>
+                                <h2 className="text-xl font-bold text-slate-800 dark:text-white font-outfit">Active Sessions</h2>
+                                <p className="text-sm text-slate-500 dark:text-slate-400">Manage your connected WhatsApp instances.</p>
                             </div>
                             <button onClick={fetchSessions} className="p-2 text-slate-400 hover:text-blue-600 transition-colors">
                                 <RefreshCw className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} />
@@ -274,7 +274,7 @@ export default function SessionsPage() {
                         ) : (
                             <div className="grid gap-3">
                                 {sessions.map(id => (
-                                    <div key={id} className="group flex items-center gap-4 p-4 rounded-2xl border border-slate-100 bg-gradient-to-r from-white to-green-50/50 hover:border-slate-200 hover:shadow-sm transition-all duration-200">
+                                    <div key={id} className="group flex items-center gap-4 p-4 rounded-2xl border border-white/60 bg-white/70 hover:bg-white/90 hover:shadow-soft transition-all duration-300">
                                         {/* Left: Avatar */}
                                         <div className="relative flex-shrink-0">
                                             <div className="w-11 h-11 rounded-2xl bg-green-100 flex items-center justify-center shadow-sm">
@@ -288,7 +288,7 @@ export default function SessionsPage() {
 
                                         {/* Center: Info */}
                                         <div className="flex-1 min-w-0">
-                                            <p className="font-semibold text-slate-800 truncate text-sm">{displayName(id)}</p>
+                                            <p className="font-semibold text-slate-800 dark:text-white truncate text-sm">{displayName(id)}</p>
                                             <div className="flex items-center gap-2 mt-0.5">
                                                 <span className="inline-flex items-center gap-1 text-[10px] font-bold text-green-700 bg-green-100 px-2 py-0.5 rounded-full uppercase tracking-wider">
                                                     ● Live
@@ -300,7 +300,7 @@ export default function SessionsPage() {
                                         {/* Right: Disconnect button */}
                                         <button
                                             onClick={() => setModalSession(id)}
-                                            className="flex-shrink-0 text-xs font-semibold text-slate-500 hover:text-red-600 border border-slate-200 hover:border-red-200 hover:bg-red-50 px-3 py-1.5 rounded-xl transition-all duration-200"
+                                            className="flex-shrink-0 text-xs font-bold text-slate-500 hover:text-red-500 border border-slate-200 hover:border-red-100 hover:bg-red-50 px-4 py-2 rounded-xl transition-all duration-200 bg-white shadow-sm"
                                         >
                                             Disconnect
                                         </button>
@@ -313,9 +313,9 @@ export default function SessionsPage() {
 
                 {/* Create Session */}
                 <div className="lg:col-span-1">
-                    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 sticky top-24">
-                        <h2 className="text-xl font-bold text-slate-900 font-outfit mb-2">New Session</h2>
-                        <p className="text-sm text-slate-500 mb-6">Create an ID and link a new device securely.</p>
+                    <div className="bg-white dark:bg-card-dark rounded-2xl shadow-soft p-6 glass sticky top-24">
+                        <h2 className="text-xl font-bold text-slate-800 dark:text-white font-outfit mb-2">New Session</h2>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">Create an ID and link a new device securely.</p>
 
                         <form onSubmit={handleCreateSession} className="space-y-4">
                             <div>
@@ -325,7 +325,7 @@ export default function SessionsPage() {
                                     value={newSessionId}
                                     onChange={e => setNewSessionId(e.target.value.replace(/[^a-zA-Z0-9-]/g, ''))}
                                     placeholder="e.g., sales-phone-1"
-                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all font-mono text-sm"
+                                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary transition-all font-mono text-sm dark:text-white"
                                     required
                                     disabled={isPolling}
                                 />
@@ -333,7 +333,7 @@ export default function SessionsPage() {
                             <button
                                 type="submit"
                                 disabled={isPolling || !newSessionId}
-                                className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium py-3 rounded-xl transition-all shadow-sm"
+                                className="w-full bg-primary hover:bg-teal-700 disabled:opacity-50 text-white font-medium py-3 rounded-xl transition-all shadow-glow"
                             >
                                 {isPolling ? 'Connecting...' : 'Generate Target'}
                             </button>

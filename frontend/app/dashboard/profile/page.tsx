@@ -1,13 +1,16 @@
 "use client";
 import React from "react";
 import { useAuth } from "@/components/AuthProvider";
+import { useTheme } from "@/lib/ThemeContext";
 import { motion } from "framer-motion";
-import { User, CreditCard, HelpCircle, LogOut, ChevronRight, Settings } from "lucide-react";
+import { User, CreditCard, HelpCircle, LogOut, ChevronRight, Settings, Sun, Moon } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 
 export default function ProfilePage() {
     const { user, userData } = useAuth();
+    const { theme, toggleTheme } = useTheme();
+    const isDark = theme === "dark";
 
     const handleLogout = async () => {
         try {
@@ -21,7 +24,7 @@ export default function ProfilePage() {
     if (!user || !userData) {
         return (
             <div className="flex justify-center items-center h-64">
-                <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
             </div>
         );
     }
@@ -33,9 +36,12 @@ export default function ProfilePage() {
 
     return (
         <div className="max-w-2xl mx-auto pb-12">
-            {/* Header / Native App Style Header */}
+
+            {/* Header */}
             <div className="mb-8 pt-4">
-                <h1 className="text-2xl font-bold text-slate-900 font-outfit tracking-tight">Profile</h1>
+                <h1 className="text-2xl font-bold font-outfit tracking-tight" style={{ color: 'var(--text-primary)' }}>
+                    Profile
+                </h1>
             </div>
 
             <motion.div
@@ -44,14 +50,21 @@ export default function ProfilePage() {
                 className="space-y-6"
             >
                 {/* ── User ID Card ── */}
-                <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100 flex items-center gap-5">
-                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-white text-xl font-bold font-outfit shadow-md shrink-0">
+                <div className="rounded-2xl p-6 flex items-center gap-5 shadow-sm"
+                    style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-xl font-bold font-outfit shadow-md shrink-0">
                         {initials}
                     </div>
                     <div className="flex-1 min-w-0">
-                        <h2 className="text-xl font-bold text-slate-900 truncate">{displayName || "User"}</h2>
-                        <p className="text-sm text-slate-500 truncate">{email}</p>
-                        {company && <p className="text-xs font-semibold text-blue-600 mt-1 uppercase tracking-wider">{company}</p>}
+                        <h2 className="text-xl font-bold truncate" style={{ color: 'var(--text-primary)' }}>
+                            {displayName || "User"}
+                        </h2>
+                        <p className="text-sm truncate" style={{ color: 'var(--text-secondary)' }}>{email}</p>
+                        {company && (
+                            <p className="text-xs font-semibold text-indigo-500 mt-1 uppercase tracking-wider">
+                                {company}
+                            </p>
+                        )}
                     </div>
                 </div>
 
@@ -60,70 +73,145 @@ export default function ProfilePage() {
 
                     {/* Account Section */}
                     <div>
-                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 ml-2 lg:ml-0">Account</h3>
-                        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden divide-y divide-slate-100">
+                        <h3 className="text-xs font-bold uppercase tracking-widest mb-3 ml-2 lg:ml-0"
+                            style={{ color: 'var(--text-muted)' }}>Account</h3>
+                        <div className="rounded-2xl overflow-hidden divide-y"
+                            style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderColor: 'var(--border)' }}>
 
-                            <button className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors group">
+                            <button className="w-full flex items-center justify-between p-4 transition-colors group"
+                                style={{ '--hover-bg': 'var(--bg-hover)' } as React.CSSProperties}
+                                onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                                 <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-lg bg-blue-50 flex items-center justify-center group-hover:bg-blue-100 transition-colors">
-                                        <User className="w-4 h-4 text-blue-600" />
+                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+                                        style={{ background: 'rgba(79,70,229,0.1)' }}>
+                                        <User className="w-4 h-4" style={{ color: 'var(--color-primary)' }} />
                                     </div>
-                                    <span className="text-sm font-semibold text-slate-700">Edit Profile</span>
+                                    <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Edit Profile</span>
                                 </div>
-                                <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />
+                                <ChevronRight className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
                             </button>
 
-                            <button className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors group">
+                            <button className="w-full flex items-center justify-between p-4 transition-colors group"
+                                onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                                 <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center group-hover:bg-indigo-100 transition-colors">
-                                        <CreditCard className="w-4 h-4 text-indigo-600" />
+                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+                                        style={{ background: 'rgba(79,70,229,0.08)' }}>
+                                        <CreditCard className="w-4 h-4" style={{ color: 'var(--color-primary)' }} />
                                     </div>
-                                    <div className="flex flex-col items-start">
-                                        <span className="text-sm font-semibold text-slate-700">Subscription</span>
-                                    </div>
+                                    <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Subscription</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <span className="text-xs font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 uppercase tracking-wider">
+                                    <span className="text-xs font-bold px-2 py-0.5 rounded-md uppercase tracking-wider"
+                                        style={{ background: 'var(--bg-subtle)', color: 'var(--text-secondary)' }}>
                                         {plan}
                                     </span>
-                                    <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />
+                                    <ChevronRight className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
                                 </div>
                             </button>
 
-                            <button className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors group">
+                            <button className="w-full flex items-center justify-between p-4 transition-colors group"
+                                onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                                 <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center group-hover:bg-slate-200 transition-colors">
-                                        <Settings className="w-4 h-4 text-slate-600" />
+                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+                                        style={{ background: 'var(--bg-subtle)' }}>
+                                        <Settings className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
                                     </div>
-                                    <span className="text-sm font-semibold text-slate-700">Preferences</span>
+                                    <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Preferences</span>
                                 </div>
-                                <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />
+                                <ChevronRight className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* ── Appearance (Dark / Light Toggle) ── */}
+                    <div>
+                        <h3 className="text-xs font-bold uppercase tracking-widest mb-3 ml-2 lg:ml-0"
+                            style={{ color: 'var(--text-muted)' }}>Appearance</h3>
+                        <div className="rounded-2xl p-4 flex items-center justify-between"
+                            style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+                            <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+                                    style={{ background: isDark ? 'rgba(99,102,241,0.15)' : 'rgba(251,191,36,0.12)' }}>
+                                    {isDark
+                                        ? <Moon className="w-4 h-4 text-indigo-400" />
+                                        : <Sun className="w-4 h-4 text-amber-500" />
+                                    }
+                                </div>
+                                <div>
+                                    <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                                        {isDark ? "Dark Mode" : "Light Mode"}
+                                    </p>
+                                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>
+                                        {isDark ? "Switch to light" : "Switch to dark"}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* iOS-style animated toggle */}
+                            <button
+                                onClick={toggleTheme}
+                                role="switch"
+                                aria-checked={isDark}
+                                aria-label="Toggle dark mode"
+                                className="relative w-14 h-7 rounded-full p-0.5 transition-colors duration-300 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2"
+                                style={{
+                                    background: isDark
+                                        ? '#4f46e5'
+                                        : '#cbd5e1',
+                                    cursor: 'pointer',
+                                }}
+                            >
+                                <motion.div
+                                    layout
+                                    transition={{ type: "spring", stiffness: 700, damping: 35 }}
+                                    className="w-6 h-6 rounded-full shadow-md flex items-center justify-center"
+                                    style={{
+                                        background: '#ffffff',
+                                        marginLeft: isDark ? 'auto' : '0',
+                                    }}
+                                >
+                                    {isDark
+                                        ? <Moon className="w-3 h-3 text-indigo-500" />
+                                        : <Sun className="w-3 h-3 text-amber-400" />
+                                    }
+                                </motion.div>
                             </button>
                         </div>
                     </div>
 
                     {/* Support Section */}
                     <div>
-                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 ml-2 lg:ml-0">Support</h3>
-                        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                            <button className="w-full flex items-center justify-between p-4 hover:bg-slate-50 transition-colors group">
+                        <h3 className="text-xs font-bold uppercase tracking-widest mb-3 ml-2 lg:ml-0"
+                            style={{ color: 'var(--text-muted)' }}>Support</h3>
+                        <div className="rounded-2xl overflow-hidden"
+                            style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
+                            <button className="w-full flex items-center justify-between p-4 transition-colors"
+                                onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-hover)')}
+                                onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                                 <div className="flex items-center gap-3">
-                                    <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center group-hover:bg-amber-100 transition-colors">
-                                        <HelpCircle className="w-4 h-4 text-amber-600" />
+                                    <div className="w-8 h-8 rounded-lg flex items-center justify-center"
+                                        style={{ background: 'rgba(245,158,11,0.1)' }}>
+                                        <HelpCircle className="w-4 h-4 text-amber-500" />
                                     </div>
-                                    <span className="text-sm font-semibold text-slate-700">Helpline / Contact Us</span>
+                                    <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+                                        Helpline / Contact Us
+                                    </span>
                                 </div>
-                                <ChevronRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />
+                                <ChevronRight className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
                             </button>
                         </div>
                     </div>
 
-                    {/* Danger Zone */}
+                    {/* Sign Out */}
                     <div>
-                        <div className="bg-white rounded-2xl shadow-sm border border-red-100 overflow-hidden mt-6">
+                        <div className="rounded-2xl overflow-hidden mt-2"
+                            style={{ background: 'var(--bg-card)', border: '1px solid rgba(239,68,68,0.2)' }}>
                             <button
                                 onClick={handleLogout}
-                                className="w-full flex items-center justify-center gap-2 p-4 hover:bg-red-50 transition-colors group text-red-600"
+                                className="w-full flex items-center justify-center gap-2 p-4 text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30 transition-colors group"
                             >
                                 <LogOut className="w-4 h-4" />
                                 <span className="text-sm font-bold">Sign Out</span>

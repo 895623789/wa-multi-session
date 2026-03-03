@@ -1,42 +1,93 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
+/* ─────────────────────────────────────────
+   Design Tokens  —  Professional 2-Theme
+   ───────────────────────────────────────── */
 @theme {
-  --color-primary: #0e7490;
-  --color-accent-teal: #14b8a6;
-  --color-accent-purple: #a855f7;
-  --color-accent-pink: #ec4899;
-  --color-accent-orange: #f97316;
-  --color-accent-blue: #3b82f6;
+  --color-primary: #4f46e5;
+  /* Indigo brand */
+  --color-primary-hover: #4338ca;
 
-  --shadow-soft: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
-  --shadow-glow: 0 0 15px rgba(14, 116, 144, 0.3);
+  --shadow-soft: 0 4px 24px -4px rgba(0, 0, 0, 0.08);
+  --shadow-card: 0 1px 4px 0 rgba(0, 0, 0, 0.06), 0 4px 16px -4px rgba(0, 0, 0, 0.08);
 }
 
-@layer base {
-  :root {
-    --background: #ffffff;
-    --foreground: #0f172a;
-  }
+/* ── Light Mode (default) ── */
+:root {
+  --bg: #f8fafc;
+  --bg-card: #ffffff;
+  --bg-subtle: #f1f5f9;
+  --bg-hover: #f8fafc;
+
+  --border: #e2e8f0;
+  --border-subtle: #f1f5f9;
+
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+
+  --sidebar-bg: rgba(255, 255, 255, 0.95);
+  --sidebar-border: #e2e8f0;
+}
+
+/* ── Dark Mode ── */
+.dark {
+  --bg: #0f172a;
+  --bg-card: #1e293b;
+  --bg-subtle: #1e293b;
+  --bg-hover: #334155;
+
+  --border: #334155;
+  --border-subtle: #1e293b;
+
+  --text-primary: #f1f5f9;
+  --text-secondary: #94a3b8;
+  --text-muted: #000000;
+
+  --sidebar-bg: rgba(15, 23, 42, 0.97);
+  --sidebar-border: #334155;
+}
+
+/* ── Base ── */
+html {
+  color-scheme: light;
+}
+
+html.dark {
+  color-scheme: dark;
 }
 
 body {
-  background-color: var(--background);
-  color: var(--foreground);
+  background-color: var(--bg);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
+/* ── Glass card — neutral, professional ── */
 .glass {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border);
 }
 
+/* ── Page background ── */
 .page-bg {
-  background: linear-gradient(135deg, #e0f7fa 0%, #e8eaf6 50%, #f3e5f5 100%);
+  background-color: var(--bg);
 }
 
-/* Safe area padding for modern phones with home indicators (iPhone etc.) */
+/* ── Safe area for iOS home bar ── */
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ── Smooth transition for theme switch ── */
+*,
+*::before,
+*::after {
+  transition-property: background-color, border-color, color, box-shadow;
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
 }

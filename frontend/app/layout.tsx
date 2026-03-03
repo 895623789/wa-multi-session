@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, Outfit, Manrope } from "next/font/google";
 import "./globals.css";
 import AuthProviderWrapper from "@/components/AuthProviderWrapper";
+import { ThemeProvider } from "@/lib/ThemeContext";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const outfit = Outfit({ subsets: ["latin"], variable: "--font-outfit" });
@@ -29,8 +30,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="h-full">
-      <body className={`${manrope.className} ${outfit.variable} ${inter.variable} font-display text-slate-600 dark:text-slate-300 page-bg min-h-screen transition-colors duration-300 antialiased`}>
-        <AuthProviderWrapper>{children}</AuthProviderWrapper>
+      <body className={`${manrope.className} ${outfit.variable} ${inter.variable} font-display page-bg min-h-screen antialiased`}>
+        <ThemeProvider>
+          <AuthProviderWrapper>{children}</AuthProviderWrapper>
+        </ThemeProvider>
       </body>
     </html>
   );
