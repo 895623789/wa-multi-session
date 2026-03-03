@@ -2,22 +2,42 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, MessageCircle, Send, Settings, LogOut, User, PanelLeftClose, PanelLeftOpen, Bot, ShieldCheck } from "lucide-react";
+import {
+    LayoutDashboard,
+    Users,
+    CreditCard,
+    Package,
+    IndianRupee,
+    Bell,
+    Ticket,
+    Settings,
+    ClipboardList,
+    LogOut,
+    PanelLeftClose,
+    PanelLeftOpen,
+    RefreshCcw,
+    UserCircle
+} from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import Image from "next/image";
 import { useAuth } from "./AuthProvider";
 
-export default function DashboardSidebar() {
+export default function OwnerSidebar() {
     const pathname = usePathname();
     const [isExpanded, setIsExpanded] = useState(true);
+    const { userData } = useAuth();
 
     const links = [
-        { name: "Home", href: "/dashboard", icon: LayoutDashboard },
-        { name: "Agents", href: "/dashboard/agents", icon: Bot },
-        { name: "Campaigns", href: "/dashboard/campaigns", icon: Send },
-        { name: "Neural AI", href: "/dashboard/ai", icon: Settings },
-        { name: "Profile", href: "/dashboard/profile", icon: User },
+        { name: "Dashboard", href: "/owner/dashboard", icon: LayoutDashboard },
+        { name: "Users List", href: "/owner/users", icon: Users },
+        { name: "Subscriptions", href: "/owner/subscriptions", icon: CreditCard },
+        { name: "Plan Management", href: "/owner/plans", icon: Package },
+        { name: "Payments", href: "/owner/payments", icon: IndianRupee },
+        { name: "Announcements", href: "/owner/announcements", icon: Bell },
+        { name: "Support Tickets", href: "/owner/support", icon: Ticket },
+        { name: "Activity Logs", href: "/owner/logs", icon: ClipboardList },
+        { name: "Settings", href: "/owner/settings", icon: Settings },
     ];
 
     return (
@@ -41,15 +61,18 @@ export default function DashboardSidebar() {
 
             {/* Brand/Logo */}
             <div className={`mb-8 w-full flex items-center ${isExpanded ? 'justify-start px-1' : 'justify-center'}`}>
-                <Link href="/" className="flex items-center gap-3 w-full">
-                    <div className="flex items-center justify-center w-10 h-10 shrink-0 rounded-[14px] bg-slate-900 overflow-hidden shadow-lg hover:scale-105 transition-transform border border-amber-500/30">
+                <Link href="/owner/dashboard" className="flex items-center gap-3 w-full">
+                    <div className="flex items-center justify-center w-10 h-10 shrink-0 rounded-[14px] bg-slate-900 overflow-hidden shadow-lg hover:scale-105 transition-transform border border-indigo-500/30">
                         <Image src="/logo.png" alt="Logo" width={40} height={40} className="object-cover" />
                     </div>
                     {isExpanded && (
-                        <span className="text-lg font-bold tracking-tight font-outfit transition-opacity duration-300 whitespace-nowrap"
-                            style={{ color: 'var(--text-primary)' }}>
-                            BulkReply
-                        </span>
+                        <div className="flex flex-col">
+                            <span className="text-lg font-bold tracking-tight font-outfit transition-opacity duration-300 whitespace-nowrap"
+                                style={{ color: 'var(--text-primary)' }}>
+                                BulkReply
+                            </span>
+                            <span className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest mt-[-4px]">Owner Panel</span>
+                        </div>
                     )}
                 </Link>
             </div>
@@ -57,7 +80,7 @@ export default function DashboardSidebar() {
             {/* Nav Links */}
             <nav className={`flex-1 flex flex-col gap-1.5 w-full ${isExpanded ? 'items-start' : 'items-center'}`}>
                 {links.map((link) => {
-                    const isActive = pathname === link.href;
+                    const isActive = pathname.startsWith(link.href);
                     const Icon = link.icon;
                     return (
                         <div key={link.name} className="relative group w-full flex justify-center">
@@ -93,7 +116,6 @@ export default function DashboardSidebar() {
                                 )}
                             </Link>
 
-                            {/* Tooltip (Only visible when sidebar is collapsed) */}
                             {!isExpanded && (
                                 <div className="absolute left-[100%] ml-4 px-3 py-1.5 text-xs font-semibold rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 shadow-lg"
                                     style={{ background: 'var(--text-primary)', color: 'var(--bg)' }}>
@@ -108,36 +130,51 @@ export default function DashboardSidebar() {
             </nav>
 
             {/* Bottom Actions */}
-            <div className={`flex flex-col gap-2 w-full mt-auto ${isExpanded ? 'items-start' : 'items-center'}`}>
+            <div className={`flex flex-col gap-3 w-full mt-auto ${isExpanded ? 'items-start' : 'items-center'}`}>
+                {/* Switch Button */}
+                <div className="relative group w-full flex justify-center px-1">
+                    <Link
+                        href="/dashboard"
+                        className={`flex items-center h-12 rounded-[14px] border border-indigo-200 transition-all duration-200 overflow-hidden bg-white hover:bg-indigo-50 hover:border-indigo-300 ${isExpanded ? 'w-full px-1' : 'w-[48px]'}`}
+                        style={{ color: '#4f46e5' }}
+                    >
+                        <div className="w-[44px] h-full flex items-center justify-center shrink-0">
+                            <RefreshCcw className="w-4 h-4" />
+                        </div>
+                        {isExpanded && (
+                            <span className="font-bold text-xs whitespace-nowrap transition-opacity duration-300 pr-2">
+                                Business View
+                            </span>
+                        )}
+                    </Link>
+                    {!isExpanded && (
+                        <div className="absolute left-[100%] ml-4 px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 shadow-lg">
+                            Switch to Business View
+                            <div className="absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-2 bg-indigo-600 rotate-45"></div>
+                        </div>
+                    )}
+                </div>
 
-                {/* Owner Panel Switch */}
-                {useAuth().userData?.role === 'owner' && (
-                    <div className="relative group w-full flex justify-center">
-                        <Link
-                            href="/owner/dashboard"
-                            className={`flex items-center h-12 rounded-[14px] transition-all duration-200 overflow-hidden border border-indigo-100 hover:border-indigo-200 hover:bg-indigo-50/50 ${isExpanded ? 'w-full' : 'w-[48px]'}`}
-                            style={{ color: '#4f46e5' }}
-                        >
-                            <div className="w-[48px] h-full flex items-center justify-center shrink-0">
-                                <ShieldCheck className="w-5 h-5" />
-                            </div>
-                            {isExpanded && (
-                                <span className="font-bold text-sm whitespace-nowrap transition-opacity duration-300 pr-4">
-                                    Owner Panel
-                                </span>
-                            )}
-                        </Link>
-                        {!isExpanded && (
-                            <div className="absolute left-[100%] ml-4 px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 shadow-lg">
-                                Switch to Owner Panel
-                                <div className="absolute top-1/2 -left-1 -translate-y-1/2 w-2 h-2 bg-indigo-600 rotate-45"></div>
-                            </div>
+                {/* User Profile */}
+                <div className={`flex items-center gap-3 w-full p-2 rounded-[16px] bg-slate-50/50 border border-slate-100 ${isExpanded ? '' : 'justify-center'}`}>
+                    <div className="w-10 h-10 rounded-full bg-slate-200 flex items-center justify-center shrink-0 overflow-hidden border-2 border-white shadow-sm">
+                        {userData?.photoURL ? (
+                            <Image src={userData.photoURL} alt="Avatar" width={40} height={40} className="object-cover" />
+                        ) : (
+                            <UserCircle className="w-6 h-6 text-slate-400" />
                         )}
                     </div>
-                )}
+                    {isExpanded && (
+                        <div className="flex flex-col min-w-0">
+                            <span className="text-sm font-bold truncate text-slate-700">{userData?.displayName || 'Owner'}</span>
+                            <span className="text-[10px] text-slate-400 font-medium truncate uppercase tracking-tighter">Administrator</span>
+                        </div>
+                    )}
+                </div>
 
-                <div className={`h-[1px] rounded-full my-2 transition-all duration-300 ${isExpanded ? 'w-full' : 'w-8'}`}
+                <div className={`h-[1px] rounded-full my-1 transition-all duration-300 ${isExpanded ? 'w-full' : 'w-8'}`}
                     style={{ background: 'var(--border)' }}></div>
+
                 <div className="relative group w-full flex justify-center">
                     <button
                         onClick={async () => { await signOut(auth); window.location.href = "/login"; }}
@@ -161,7 +198,6 @@ export default function DashboardSidebar() {
                             </span>
                         )}
                     </button>
-                    {/* Tooltip */}
                     {!isExpanded && (
                         <div className="absolute left-[100%] ml-4 px-3 py-1.5 bg-red-600 text-white text-xs font-semibold rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all whitespace-nowrap z-50 shadow-lg">
                             Logout

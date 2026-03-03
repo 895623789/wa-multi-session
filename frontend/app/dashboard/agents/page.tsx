@@ -453,101 +453,148 @@ export default function UnifiedAgentsPage() {
                 </div>
             )}
 
-            {/* ─── CREATION WIZARD / EDIT ─── */}
+            {/* ─── CREATION WIZARD / EDIT (now Tabs in a split layout) ─── */}
             {viewState === 'wizard' && (
-                <div className="w-full max-w-4xl glass rounded-[2rem] shadow-card relative z-10 overflow-hidden bg-white/60 dark:bg-slate-900/60 border border-white/50 dark:border-slate-800">
+                <div className="w-full max-w-6xl glass rounded-[2rem] shadow-card relative z-10 overflow-hidden bg-white/60 dark:bg-slate-900/60 border border-white/50 dark:border-slate-800 flex flex-col md:flex-row">
 
-                    {/* Wizard Progress Header */}
-                    <div className="bg-slate-50/80 dark:bg-slate-800/80 border-b border-slate-100 dark:border-slate-700 px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
-                        <div className="flex items-center gap-2">
-                            <button onClick={resetWizard} className="p-2 text-slate-400 hover:bg-white dark:hover:bg-slate-700 rounded-lg transition-colors mr-2">
-                                <ChevronLeft className="w-5 h-5" />
-                            </button>
-                            <span className="font-bold text-slate-800 dark:text-white">
-                                {editingAgentId ? "Editing:" : "Step"} {editingAgentId ? draftAgent.name : wizardStep}
-                            </span>
-                            {!editingAgentId && <span className="text-slate-400 font-medium ml-1">of 3</span>}
+                    {/* LEFT PANEL: TABS & PREVIEW */}
+                    <div className="md:w-[320px] bg-white/50 dark:bg-slate-900 border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-700 flex flex-col">
+                        <div className="p-6 border-b border-slate-200 dark:border-slate-700">
+                            <div className="flex items-center gap-3">
+                                <button onClick={resetWizard} className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-white rounded-lg transition-colors bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                                    <ChevronLeft className="w-4 h-4" />
+                                </button>
+                                <span className="font-bold text-slate-800 dark:text-white truncate">
+                                    {editingAgentId ? draftAgent.name : "New AI Agent"}
+                                </span>
+                            </div>
                         </div>
 
-                        {!editingAgentId && (
-                            <div className="flex gap-2 w-full md:w-auto px-4 md:px-0">
-                                {[1, 2, 3].map(step => (
-                                    <div key={step} className={`h-1.5 rounded-full flex-1 md:w-16 transition-all duration-300 ${step <= wizardStep ? 'bg-primary' : 'bg-slate-200 dark:bg-slate-700'}`} />
-                                ))}
+                        <div className="p-4 flex flex-row md:flex-col gap-2 overflow-x-auto md:overflow-y-auto w-full hide-scrollbar">
+                            <button
+                                onClick={() => setWizardStep(1)}
+                                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all whitespace-nowrap text-left ${wizardStep === 1 ? 'bg-indigo-50 dark:bg-indigo-900/20 text-primary font-bold shadow-sm ring-1 ring-primary/20' : 'text-slate-600 dark:text-slate-400 font-medium hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                            >
+                                <User className="w-5 h-5 shrink-0" />
+                                <div className="hidden md:block">
+                                    <div className="text-sm">Identity & Persona</div>
+                                    <div className="text-[10px] font-normal opacity-70 mt-0.5">Name, Role, Voice</div>
+                                </div>
+                            </button>
+                            <button
+                                onClick={() => setWizardStep(2)}
+                                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all whitespace-nowrap text-left ${wizardStep === 2 ? 'bg-indigo-50 dark:bg-indigo-900/20 text-primary font-bold shadow-sm ring-1 ring-primary/20' : 'text-slate-600 dark:text-slate-400 font-medium hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                            >
+                                <Briefcase className="w-5 h-5 shrink-0" />
+                                <div className="hidden md:block">
+                                    <div className="text-sm">Business logic</div>
+                                    <div className="text-[10px] font-normal opacity-70 mt-0.5">Rules, Data, Prompts</div>
+                                </div>
+                            </button>
+                            <button
+                                onClick={() => setWizardStep(3)}
+                                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all whitespace-nowrap text-left ${wizardStep === 3 ? 'bg-indigo-50 dark:bg-indigo-900/20 text-primary font-bold shadow-sm ring-1 ring-primary/20' : 'text-slate-600 dark:text-slate-400 font-medium hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                            >
+                                <ShieldCheck className="w-5 h-5 shrink-0" />
+                                <div className="hidden md:block">
+                                    <div className="text-sm">Admin & Settings</div>
+                                    <div className="text-[10px] font-normal opacity-70 mt-0.5">Owners, Behavior</div>
+                                </div>
+                            </button>
+                        </div>
+
+                        <div className="mt-auto p-4 hidden md:block border-t border-slate-200 dark:border-slate-700">
+                            <div className="bg-gradient-to-br from-slate-100 to-white dark:from-slate-800 dark:to-slate-900 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 relative overflow-hidden">
+                                <div className="text-xs font-bold text-slate-500 mb-4 inline-flex items-center gap-1.5 uppercase tracking-wider">
+                                    <MessageSquare className="w-3.5 h-3.5" /> Live Preview
+                                </div>
+                                <div className="flex items-center gap-3 mb-3">
+                                    <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden flex items-center justify-center border-2 border-white dark:border-slate-600 flex-shrink-0">
+                                        <ImageFallback type={draftAgent.gender || "Female"} role={draftAgent.role || "Assistant"} />
+                                    </div>
+                                    <div>
+                                        <div className="text-sm font-bold text-slate-800 dark:text-white line-clamp-1">{draftAgent.name || "AI Agent"}</div>
+                                        <div className="text-[10px] text-emerald-500 font-medium tracking-wide">Online • {(draftAgent.role || "Agent").split(' ')[0]}</div>
+                                    </div>
+                                </div>
+                                <div className="bg-primary/10 text-primary dark:bg-primary/20 p-2.5 rounded-xl text-xs rounded-tl-none inline-block font-medium w-full">
+                                    {draftAgent.autoGreet ? `Hi! I'm ${draftAgent.name || 'your AI'}, how can I help you?` : "Waiting for message..."}
+                                </div>
                             </div>
-                        )}
+                        </div>
                     </div>
 
-                    <div className="p-6 md:p-10 hide-scrollbar overflow-y-auto max-h-[70vh]">
-                        <AnimatePresence mode="wait">
-                            <motion.div
-                                key={wizardStep}
-                                initial={{ opacity: 0, x: 20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: -20 }}
-                                transition={{ duration: 0.2 }}
-                                className="w-full"
-                            >
-                                {/* STEP 1: IDENTITY & ROLE */}
-                                {wizardStep === 1 && (
-                                    <div className="space-y-8">
-                                        <div>
-                                            <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Give Your Agent a Name</h3>
-                                            <p className="text-sm text-slate-500 mb-6">This gives your AI personality and makes commands feel natural.</p>
-                                            <input
-                                                type="text"
-                                                value={draftAgent.name || ""}
-                                                onChange={e => setDraftAgent({ ...draftAgent, name: e.target.value })}
-                                                placeholder="e.g. Sarah, Max, Jarvis..."
-                                                className="w-full bg-white dark:bg-slate-900 border-2 border-slate-200 dark:border-slate-700 rounded-2xl px-5 py-4 text-lg font-bold focus:border-primary focus:ring-4 ring-primary/10 outline-none transition-all text-slate-900 dark:text-white shadow-sm"
-                                            />
-                                        </div>
+                    {/* RIGHT PANEL: CONTENT */}
+                    <div className="flex-1 flex flex-col relative">
+                        <div className="p-6 md:p-8 xl:p-10 flex-1 overflow-y-auto max-h-[70vh] hide-scrollbar">
+                            <AnimatePresence mode="wait">
+                                <motion.div
+                                    key={wizardStep}
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -10 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="w-full max-w-2xl mx-auto"
+                                >
 
-                                        <div>
-                                            <h3 className="text-lg font-bold text-slate-800 dark:text-white mb-4">Select a Primary Role</h3>
-                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                                {roles.map(role => {
-                                                    const Icon = role.icon;
-                                                    const isSelected = draftAgent.role === role.name;
-                                                    return (
-                                                        <button
-                                                            key={role.name}
-                                                            onClick={() => setDraftAgent({ ...draftAgent, role: role.name })}
-                                                            className={`text-left p-4 rounded-2xl border-2 transition-all duration-200 ${isSelected
-                                                                    ? 'bg-blue-50/50 dark:bg-blue-900/20 border-primary shadow-sm'
-                                                                    : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 hover:border-slate-300'
-                                                                }`}
-                                                        >
-                                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center mb-3 ${isSelected ? 'bg-primary text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300'}`}>
-                                                                <Icon className="w-5 h-5" />
-                                                            </div>
-                                                            <h4 className={`font-bold text-sm mb-1 ${isSelected ? 'text-primary' : 'text-slate-800 dark:text-white'}`}>{role.name}</h4>
-                                                            <p className="text-xs font-medium text-slate-500 line-clamp-2">{role.desc}</p>
-                                                        </button>
-                                                    )
-                                                })}
+                                    {/* TAB 1: IDENTITY */}
+                                    {wizardStep === 1 && (
+                                        <div className="space-y-8">
+                                            <div className="border-b border-slate-200 dark:border-slate-700 pb-5 mb-6">
+                                                <h3 className="text-2xl font-bold text-slate-800 dark:text-white -mb-1">Identity & Persona</h3>
+                                                <p className="text-sm text-slate-500 mt-2">Define who your agent is and how they present themselves.</p>
                                             </div>
-                                        </div>
-                                    </div>
-                                )}
 
-                                {/* STEP 2: PERSONALIZATION */}
-                                {wizardStep === 2 && (
-                                    <div className="space-y-8">
-                                        <div>
-                                            <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-6">Personalize the AI</h3>
+                                            <div>
+                                                <label className="text-sm font-bold text-slate-700 dark:text-slate-300 block mb-3">Agent Name</label>
+                                                <input
+                                                    type="text"
+                                                    value={draftAgent.name || ""}
+                                                    onChange={e => setDraftAgent({ ...draftAgent, name: e.target.value })}
+                                                    placeholder="e.g. Sarah, Max, Jarvis..."
+                                                    className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-base font-semibold focus:border-primary focus:ring-4 ring-primary/10 outline-none transition-all text-slate-900 dark:text-white shadow-sm"
+                                                />
+                                            </div>
 
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                            <div>
+                                                <label className="text-sm font-bold text-slate-700 dark:text-slate-300 block mb-4">Primary Role Focus</label>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                                    {roles.map(role => {
+                                                        const Icon = role.icon;
+                                                        const isSelected = draftAgent.role === role.name;
+                                                        return (
+                                                            <button
+                                                                key={role.name}
+                                                                onClick={() => setDraftAgent({ ...draftAgent, role: role.name })}
+                                                                className={`text-left p-4 rounded-xl border-2 transition-all duration-200 ${isSelected
+                                                                    ? 'bg-blue-50/80 dark:bg-blue-900/40 border-primary shadow-sm'
+                                                                    : 'bg-white dark:bg-slate-800/50 border-slate-100 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                                                                    }`}
+                                                            >
+                                                                <div className="flex items-center gap-3 mb-1">
+                                                                    <div className={`p-1.5 rounded-lg flex items-center justify-center ${isSelected ? 'bg-primary text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300'}`}>
+                                                                        <Icon className="w-4 h-4" />
+                                                                    </div>
+                                                                    <h4 className={`font-bold text-sm ${isSelected ? 'text-primary' : 'text-slate-800 dark:text-white'}`}>{role.name}</h4>
+                                                                </div>
+                                                                <p className="text-xs font-medium text-slate-500 mt-1.5 line-clamp-1">{role.desc}</p>
+                                                            </button>
+                                                        )
+                                                    })}
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
                                                 <div className="space-y-3">
-                                                    <label className="text-sm font-bold text-slate-700 dark:text-slate-300 block">Gender Profile</label>
-                                                    <div className="flex gap-3">
+                                                    <label className="text-sm font-bold text-slate-700 dark:text-slate-300 block">Gender Alignment</label>
+                                                    <div className="flex bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl">
                                                         {['Female', 'Male', 'Neutral'].map(g => (
                                                             <button
                                                                 key={g}
                                                                 onClick={() => setDraftAgent({ ...draftAgent, gender: g })}
-                                                                className={`flex-1 py-3 px-2 rounded-xl border-2 text-sm font-bold transition-all ${draftAgent.gender === g
-                                                                        ? 'border-primary bg-primary text-white shadow-md'
-                                                                        : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
+                                                                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${draftAgent.gender === g
+                                                                    ? 'bg-white dark:bg-slate-700 text-primary shadow-sm'
+                                                                    : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                                                                     }`}
                                                             >
                                                                 {g}
@@ -559,173 +606,211 @@ export default function UnifiedAgentsPage() {
                                                 <div className="space-y-3">
                                                     <div className="flex justify-between items-center">
                                                         <label className="text-sm font-bold text-slate-700 dark:text-slate-300">Perceived Age</label>
-                                                        <span className="bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-lg text-xs font-bold text-primary">{draftAgent.age} Years</span>
+                                                        <span className="text-xs font-bold text-primary">{draftAgent.age}</span>
                                                     </div>
-                                                    <input
-                                                        type="range"
-                                                        min="18" max="65"
-                                                        value={draftAgent.age}
-                                                        onChange={e => setDraftAgent({ ...draftAgent, age: parseInt(e.target.value) })}
-                                                        className="w-full h-2.5 bg-slate-200 dark:bg-slate-700 rounded-xl appearance-none cursor-pointer accent-primary mt-4"
-                                                    />
-                                                    <div className="flex justify-between text-xs font-medium text-slate-400 px-1">
-                                                        <span>18 (Gen Z)</span>
-                                                        <span>65 (Senior)</span>
+                                                    <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-200 dark:border-slate-700">
+                                                        <input
+                                                            type="range"
+                                                            min="18" max="65"
+                                                            value={draftAgent.age}
+                                                            onChange={e => setDraftAgent({ ...draftAgent, age: parseInt(e.target.value) })}
+                                                            className="w-full h-1.5 bg-slate-200 dark:bg-slate-700 rounded-xl appearance-none cursor-pointer accent-primary"
+                                                        />
+                                                        <div className="flex justify-between text-[10px] uppercase font-bold text-slate-400 mt-2 px-0.5">
+                                                            <span>Young</span>
+                                                            <span>Mature</span>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
+                                    )}
 
-                                        <div className="bg-blue-50/50 dark:bg-slate-800/50 rounded-2xl p-6 border border-blue-100 dark:border-slate-700">
-                                            <div className="flex items-center gap-3 mb-4">
-                                                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center"><Navigation className="w-4 h-4" /></div>
-                                                <h4 className="font-bold text-slate-800 dark:text-white">Chat Behavior Setting</h4>
+                                    {/* TAB 2: RULES AND KNOWLEDGE */}
+                                    {wizardStep === 2 && (
+                                        <div className="space-y-8">
+                                            <div className="border-b border-slate-200 dark:border-slate-700 pb-5 mb-6">
+                                                <h3 className="text-2xl font-bold text-slate-800 dark:text-white -mb-1">Business Logic</h3>
+                                                <p className="text-sm text-slate-500 mt-2">What does your agent know? How should they respond?</p>
                                             </div>
-                                            <div className="flex items-center justify-between bg-white dark:bg-slate-900 p-4 rounded-xl border border-slate-200 dark:border-slate-700">
-                                                <div>
-                                                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Auto-Greeting</p>
-                                                    <p className="text-xs text-slate-500 mt-1">Send a welcome message to new contacts automatically.</p>
-                                                </div>
-                                                <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-4">
-                                                    <input
-                                                        type="checkbox"
-                                                        className="sr-only peer"
-                                                        checked={draftAgent.autoGreet}
-                                                        onChange={e => setDraftAgent({ ...draftAgent, autoGreet: e.target.checked })}
-                                                    />
-                                                    <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-primary"></div>
+
+                                            <div>
+                                                <label className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between mb-3">
+                                                    <span>Business Data / Offers Catalog</span>
+                                                    <span className="text-[10px] font-normal px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-500">Context</span>
                                                 </label>
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* STEP 3: RULES & KNOWLEDGE */}
-                                {wizardStep === 3 && (
-                                    <div className="space-y-8">
-                                        <div>
-                                            <h3 className="text-xl font-bold text-slate-800 dark:text-white mb-2">Train Your Agent</h3>
-                                            <p className="text-sm text-slate-500 mb-6">Tell the AI what you sell, and provide rules on how to respond.</p>
-
-                                            <div className="space-y-5">
-                                                <div>
-                                                    <label className="text-sm font-bold text-slate-700 dark:text-slate-300 block mb-2">Business Data / Offers</label>
+                                                <div className="relative group">
                                                     <textarea
-                                                        rows={3}
+                                                        rows={4}
                                                         value={draftAgent.businessInfo || ""}
                                                         onChange={e => setDraftAgent({ ...draftAgent, businessInfo: e.target.value })}
-                                                        placeholder="E.g. We sell SAAS subscriptions. Basic tier is $10/mo, Pro is $25/mo..."
-                                                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 ring-primary/20 outline-none transition-shadow resize-none"
+                                                        placeholder="Paste price lists, service details, or FAQs here..."
+                                                        className="w-full bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 text-sm focus:border-primary focus:ring-4 ring-primary/10 outline-none transition-all resize-none font-sans"
                                                     />
                                                 </div>
+                                            </div>
 
-                                                <div>
-                                                    <div className="flex justify-between items-center mb-2">
-                                                        <label className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2">
-                                                            <FileText className="w-4 h-4 text-primary" /> Core Prompt (System Instructions)
-                                                        </label>
+                                            <div>
+                                                <label className="text-sm font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between mb-3">
+                                                    <span className="flex items-center gap-2"><FileText className="w-4 h-4 text-primary" /> Core System Prompt</span>
+                                                    <span className="text-[10px] font-normal px-2 py-0.5 rounded-md bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">Instructions</span>
+                                                </label>
+                                                <div className="relative border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden focus-within:ring-4 ring-primary/10 transition-all focus-within:border-primary">
+                                                    <div className="bg-slate-100 dark:bg-slate-800 px-3 py-2 text-[10px] font-mono text-slate-500 border-b border-slate-200 dark:border-slate-700">
+                                                        system_directive.txt
                                                     </div>
                                                     <textarea
-                                                        rows={6}
+                                                        rows={7}
                                                         value={draftAgent.instructions || ""}
                                                         onChange={e => setDraftAgent({ ...draftAgent, instructions: e.target.value })}
                                                         placeholder={DEFAULT_INSTRUCTIONS}
-                                                        className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-4 text-sm font-medium focus:ring-2 ring-primary/20 outline-none transition-shadow resize-none font-mono leading-relaxed"
+                                                        className="w-full bg-slate-50 dark:bg-slate-900/50 px-4 py-3 text-sm font-medium outline-none resize-none font-mono text-slate-700 dark:text-slate-300 leading-relaxed"
                                                     />
-                                                    <p className="text-[11px] text-slate-400 mt-2">Write clearly. Example: "Never offer discounts unless asked twice."</p>
                                                 </div>
                                             </div>
                                         </div>
+                                    )}
 
-                                        <div className="bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl p-5">
-                                            <label className="text-sm font-bold text-slate-800 dark:text-white flex items-center gap-2 mb-1">
-                                                <ShieldCheck className="w-4 h-4 text-emerald-500" /> Admin/Owner Numbers
-                                            </label>
-                                            <p className="text-xs text-slate-500 mb-4 block">AI will obey direct commands from these numbers without sales talk.</p>
+                                    {/* TAB 3: SETTINGS AND ADMIN */}
+                                    {wizardStep === 3 && (
+                                        <div className="space-y-8">
+                                            <div className="border-b border-slate-200 dark:border-slate-700 pb-5 mb-6">
+                                                <h3 className="text-2xl font-bold text-slate-800 dark:text-white -mb-1">Admin & Settings</h3>
+                                                <p className="text-sm text-slate-500 mt-2">Manage owner controls and behavioral toggles.</p>
+                                            </div>
 
-                                            <div className="space-y-3">
-                                                {(draftAgent.ownerNumbers || [""]).map((num, i) => (
-                                                    <div key={i} className="flex items-center gap-2">
-                                                        <input
-                                                            type="text"
-                                                            value={num}
-                                                            onChange={e => {
-                                                                const newNums = [...(draftAgent.ownerNumbers || [])];
-                                                                newNums[i] = e.target.value;
-                                                                setDraftAgent({ ...draftAgent, ownerNumbers: newNums });
-                                                            }}
-                                                            placeholder="e.g. 919876543210"
-                                                            className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-sm font-medium focus:ring-2 ring-primary/20 outline-none transition-shadow font-mono"
-                                                        />
-                                                        {((draftAgent.ownerNumbers?.length || 0) > 1) && (
-                                                            <button
-                                                                onClick={() => {
-                                                                    const newNums = (draftAgent.ownerNumbers || []).filter((_, idx) => idx !== i);
-                                                                    setDraftAgent({ ...draftAgent, ownerNumbers: newNums });
-                                                                }}
-                                                                className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition"
-                                                            >
-                                                                <Trash2 className="w-4 h-4" />
-                                                            </button>
-                                                        )}
+                                            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                                                <div className="p-5 border-b border-slate-200 dark:border-slate-700 bg-white/50 dark:bg-slate-800/80">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <ShieldCheck className="w-5 h-5 text-emerald-500" />
+                                                        <h4 className="font-bold text-slate-800 dark:text-white">Owner Numbers</h4>
                                                     </div>
-                                                ))}
-                                                {((draftAgent.ownerNumbers?.length || 0) < 5) && (
-                                                    <button
-                                                        onClick={() => setDraftAgent({ ...draftAgent, ownerNumbers: [...(draftAgent.ownerNumbers || []), ""] })}
-                                                        className="mt-2 text-xs font-bold text-primary hover:text-indigo-700 flex items-center gap-1 integration-hover p-2 rounded-lg"
-                                                    >
-                                                        <Plus className="w-3.5 h-3.5" /> Add Number
-                                                    </button>
-                                                )}
+                                                    <p className="text-xs text-slate-500">The AI will obey direct commands and skip sales spiels for these numbers.</p>
+                                                </div>
+                                                <div className="p-5 space-y-3">
+                                                    {(draftAgent.ownerNumbers || [""]).map((num, i) => (
+                                                        <div key={i} className="flex items-center gap-3">
+                                                            <div className="flex-1 relative">
+                                                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">+</span>
+                                                                <input
+                                                                    type="text"
+                                                                    value={num}
+                                                                    onChange={e => {
+                                                                        const newNums = [...(draftAgent.ownerNumbers || [])];
+                                                                        newNums[i] = e.target.value;
+                                                                        setDraftAgent({ ...draftAgent, ownerNumbers: newNums });
+                                                                    }}
+                                                                    placeholder="919876543210"
+                                                                    className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl pl-8 pr-4 py-2.5 text-sm font-medium focus:border-primary focus:ring-2 ring-primary/20 outline-none transition-all font-mono shadow-sm"
+                                                                />
+                                                            </div>
+                                                            {((draftAgent.ownerNumbers?.length || 0) > 1) && (
+                                                                <button
+                                                                    onClick={() => {
+                                                                        const newNums = (draftAgent.ownerNumbers || []).filter((_, idx) => idx !== i);
+                                                                        setDraftAgent({ ...draftAgent, ownerNumbers: newNums });
+                                                                    }}
+                                                                    className="p-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 rounded-xl transition"
+                                                                    title="Remove"
+                                                                >
+                                                                    <Trash2 className="w-4 h-4" />
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    ))}
+                                                    {((draftAgent.ownerNumbers?.length || 0) < 3) && (
+                                                        <button
+                                                            onClick={() => setDraftAgent({ ...draftAgent, ownerNumbers: [...(draftAgent.ownerNumbers || []), ""] })}
+                                                            className="text-xs font-bold text-slate-500 hover:text-primary flex items-center gap-1.5 transition-colors p-1"
+                                                        >
+                                                            <Plus className="w-3.5 h-3.5" /> Add Another Admin
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div className="bg-blue-50/50 dark:bg-blue-900/10 rounded-2xl border border-blue-100 dark:border-slate-700 overflow-hidden">
+                                                <div className="p-5 flex items-center justify-between">
+                                                    <div className="flex items-start gap-3">
+                                                        <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0 mt-0.5"><Navigation className="w-4 h-4" /></div>
+                                                        <div>
+                                                            <h4 className="font-bold text-slate-800 dark:text-white">Auto-Greeting</h4>
+                                                            <p className="text-xs text-slate-500 mt-0.5 w-4/5">Agent initiates contact automatically when a new unread conversation opens.</p>
+                                                        </div>
+                                                    </div>
+                                                    <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-4">
+                                                        <input
+                                                            type="checkbox"
+                                                            className="sr-only peer"
+                                                            checked={draftAgent.autoGreet}
+                                                            onChange={e => setDraftAgent({ ...draftAgent, autoGreet: e.target.checked })}
+                                                        />
+                                                        <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-slate-600 peer-checked:bg-primary"></div>
+                                                    </label>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
+                                    )}
+                                </motion.div>
+                            </AnimatePresence>
+                        </div>
+
+                        {/* TABS FOOTER & SAVE BUTTONS */}
+                        <div className="p-4 md:p-6 border-t border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/80 flex items-center justify-between mt-auto z-20">
+                            <div className="hidden sm:block text-xs text-slate-500 font-medium">
+                                {draftAgent.name ? `Configuring: ${draftAgent.name}` : "Setup Configuration"}
+                            </div>
+
+                            <div className="flex gap-3 w-full sm:w-auto justify-end">
+                                {editingAgentId ? (
+                                    <button
+                                        onClick={handleEditSave}
+                                        disabled={!draftAgent.name?.trim()}
+                                        className="px-6 py-2.5 bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 dark:hover:bg-slate-600 text-white rounded-xl text-sm font-bold transition-all disabled:opacity-50 flex items-center gap-2"
+                                    >
+                                        <Save className="w-4 h-4" /> Save Setup
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={() => {
+                                            saveAgentLocally({
+                                                id: `dummy-${Date.now()}`, // Temporary ID for pending state if we needed one, or directly generate
+                                                name: draftAgent.name || "AI Agent",
+                                                role: draftAgent.role || "Assistant",
+                                                gender: draftAgent.gender || "Female",
+                                                age: draftAgent.age || 25,
+                                                businessInfo: draftAgent.businessInfo || "",
+                                                instructions: draftAgent.instructions || "",
+                                                ownerNumbers: draftAgent.ownerNumbers || [],
+                                                replyDelay: draftAgent.replyDelay || 0,
+                                                autoGreet: draftAgent.autoGreet ?? true,
+                                                isActive: true,
+                                                updatedAt: Date.now()
+                                            });
+                                            showToast("Agent Draft Saved", "You can now connect to WhatsApp.", "success");
+                                        }}
+                                        disabled={!draftAgent.name?.trim()}
+                                        className="px-6 py-2.5 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 rounded-xl text-sm font-bold transition-all disabled:opacity-50"
+                                    >
+                                        Quick Save
+                                    </button>
                                 )}
-                            </motion.div>
-                        </AnimatePresence>
-                    </div>
 
-                    {/* Wizard Footer / Buttons */}
-                    <div className="bg-slate-50/80 dark:bg-slate-800/80 border-t border-slate-100 dark:border-slate-700 p-6 flex justify-between items-center rounded-b-[2rem]">
-                        <button
-                            onClick={editingAgentId ? resetWizard : (wizardStep === 1 ? resetWizard : () => setWizardStep(wizardStep - 1))}
-                            className="px-6 py-3 text-sm font-bold text-slate-500 hover:text-slate-800 dark:hover:text-white transition-colors"
-                        >
-                            {editingAgentId ? "Cancel" : (wizardStep === 1 ? "Cancel" : "Back")}
-                        </button>
-
-                        {editingAgentId ? (
-                            <button
-                                onClick={handleEditSave}
-                                className="px-8 py-3 bg-primary hover:bg-indigo-600 text-white rounded-xl text-sm font-bold transition-all shadow-lg flex items-center gap-2"
-                            >
-                                <Save className="w-4 h-4" /> Save Changes
-                            </button>
-                        ) : (
-                            wizardStep < 3 ? (
-                                <button
-                                    onClick={() => setWizardStep(wizardStep + 1)}
-                                    // Make sure name is provided to proceed from step 1
-                                    disabled={wizardStep === 1 && !draftAgent.name?.trim()}
-                                    className="px-8 py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl text-sm font-bold transition-all shadow-lg hover:shadow-xl hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                                >
-                                    Continue <ChevronRight className="w-4 h-4" />
-                                </button>
-                            ) : (
                                 <button
                                     onClick={handleGenerateQR}
-                                    className="px-8 py-3 bg-primary hover:bg-indigo-600 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-500/25 flex items-center gap-2 hover:-translate-y-0.5"
+                                    disabled={!draftAgent.name?.trim()}
+                                    className="px-6 py-2.5 bg-primary hover:bg-indigo-600 text-white rounded-xl text-sm font-bold transition-all shadow-lg shadow-primary/30 flex items-center gap-2 disabled:opacity-50 disabled:shadow-none"
                                 >
-                                    <Check className="w-5 h-5" /> Finish & Connect
+                                    <Smartphone className="w-4 h-4" /> Connect WhatsApp
                                 </button>
-                            )
-                        )}
+                            </div>
+                        </div>
+
                     </div>
                 </div>
             )}
 
-            {/* ─── QR CONNECTION OVERLAY (Step 4 implicit) ─── */}
+            {/* ─── QR CONNECTION OVERLAY (Triggered by Connect Button) ─── */}
             {viewState === 'qr' && (
                 <div className="w-full max-w-lg glass rounded-3xl p-8 border border-white/40 shadow-card relative z-20 flex flex-col items-center justify-center animate-in zoom-in-95 bg-white/95 dark:bg-slate-900/95 my-auto">
 
