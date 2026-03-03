@@ -28,9 +28,7 @@
     "mime": "^3.0.0",
     "multer": "^2.1.0",
     "pino": "^9.5.0",
-    "qrcode": "^1.5.4",
-    "sqlite": "^5.1.1",
-    "sqlite3": "^5.1.7"
+    "qrcode": "^1.5.4"
   },
   "repository": {
     "type": "git",
