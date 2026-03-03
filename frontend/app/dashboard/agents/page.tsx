@@ -836,6 +836,14 @@ export default function UnifiedAgentsPage() {
                             transition={{ type: "spring", damping: 20 }}
                             className="relative w-full max-w-sm bg-white dark:bg-slate-800 rounded-[3rem] p-6 md:p-8 flex flex-col items-center text-center shadow-[0_64px_128px_-16px_rgba(0,0,0,0.5)] border border-white/10"
                         >
+                            {/* Close Button */}
+                            <button
+                                onClick={resetWizard}
+                                className="absolute top-6 right-6 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-all active:scale-95 z-20"
+                            >
+                                <X size={20} strokeWidth={3} />
+                            </button>
+
                             <div className="w-14 h-14 bg-indigo-50 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center mb-4 shadow-inner border-2 border-white dark:border-slate-700">
                                 <QrCode className="w-6 h-6 text-primary" />
                             </div>

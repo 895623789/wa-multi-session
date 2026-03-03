@@ -57,42 +57,38 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
             if (!firebaseUser) {
                 setUserData(null);
                 setLoading(false);
-                // Redirect to login if on a protected route
+                // Redirect if needed
                 if (!PUBLIC_ROUTES.includes(pathname)) {
                     router.replace("/login");
                 }
-                return;
             }
-
-            // Listen to user's Firestore document (1 real-time listener, no extra reads)
-            const unsubDoc = onSnapshot(
-                doc(db, "users", firebaseUser.uid),
-                (snap) => {
-                    if (snap.exists()) {
-                        const data = snap.data() as UserData;
-                        setUserData(data);
-
-                        // Route guards
-                        if (!data.onboardingComplete && pathname.startsWith("/dashboard")) {
-                            router.replace("/onboarding");
-                        }
-                    } else {
-                        // Doc doesn't exist yet (just signed up, will be created)
-                        setUserData(null);
-                    }
-                    setLoading(false);
-                },
-                (err) => {
-                    console.error("Firestore listener error:", err);
-                    setLoading(false);
-                }
-            );
-
-            return () => unsubDoc();
         });
 
         return () => unsubAuth();
     }, [pathname, router]);
+
+    useEffect(() => {
+        if (!user) return;
+
+        console.log("Setting up Firestore listener for:", user.uid);
+        const unsubDoc = onSnapshot(
+            doc(db, "users", user.uid),
+            (snap) => {
+                if (snap.exists()) {
+                    setUserData(snap.data() as UserData);
+                } else {
+                    setUserData(null);
+                }
+                setLoading(false);
+            },
+            (err) => {
+                console.error("Firestore listener error:", err);
+                setLoading(false);
+            }
+        );
+
+        return () => unsubDoc();
+    }, [user]);
 
     // Show nothing while loading auth state
     if (loading) {

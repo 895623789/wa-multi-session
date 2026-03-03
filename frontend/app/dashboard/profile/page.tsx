@@ -51,22 +51,49 @@ export default function ProfilePage() {
                 animate={{ opacity: 1, y: 0 }}
                 className="space-y-6"
             >
-                {/* ── User ID Card ── */}
-                <div className="rounded-2xl p-6 flex items-center gap-5 shadow-sm"
-                    style={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }}>
-                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-white text-xl font-bold font-outfit shadow-md shrink-0">
-                        {initials}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                        <h2 className="text-xl font-bold truncate" style={{ color: 'var(--text-primary)' }}>
-                            {displayName || "User"}
-                        </h2>
-                        <p className="text-sm truncate" style={{ color: 'var(--text-secondary)' }}>{email}</p>
-                        {company && (
-                            <p className="text-xs font-semibold text-indigo-500 mt-1 uppercase tracking-wider">
-                                {company}
-                            </p>
-                        )}
+                {/* ── User ID Card (Modernized) ── */}
+                <div className="relative rounded-[32px] p-8 overflow-hidden group shadow-xl shadow-indigo-500/5 transition-all duration-500 hover:shadow-2xl hover:shadow-indigo-500/10 active:scale-[0.99]"
+                    style={{
+                        background: 'linear-gradient(135deg, var(--bg-card) 0%, var(--bg-subtle) 100%)',
+                        border: '1px solid var(--border)',
+                    }}>
+
+                    {/* Background Accent / Glass Decor */}
+                    <div className="absolute -top-12 -right-12 w-48 h-48 bg-indigo-500/10 rounded-full blur-3xl group-hover:bg-indigo-500/20 transition-all duration-700" />
+                    <div className="absolute -bottom-12 -left-12 w-32 h-32 bg-violet-500/5 rounded-full blur-2xl" />
+
+                    <div className="relative flex flex-col md:flex-row items-center md:items-start gap-6 z-10">
+                        {/* Avatar Block with Layered Glow */}
+                        <div className="relative shrink-0">
+                            <div className="absolute inset-0 bg-indigo-500/20 rounded-full blur-xl animate-pulse" />
+                            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-indigo-500 via-indigo-600 to-violet-700 flex items-center justify-center text-white text-2xl font-black font-outfit shadow-2xl relative border-4 border-white dark:border-slate-800">
+                                {initials}
+                            </div>
+                            <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-emerald-500 border-4 border-white dark:border-slate-800 rounded-full shadow-lg" />
+                        </div>
+
+                        {/* Info Block */}
+                        <div className="flex-1 text-center md:text-left min-w-0 flex flex-col justify-center h-full">
+                            <div className="mb-0.5">
+                                <h2 className="text-2xl font-black tracking-tight leading-tight" style={{ color: 'var(--text-primary)' }}>
+                                    {displayName || "User"}
+                                </h2>
+                                <p className="text-sm font-bold opacity-60 flex items-center justify-center md:justify-start gap-1.5" style={{ color: 'var(--text-secondary)' }}>
+                                    {email}
+                                </p>
+                            </div>
+
+                            {company && (
+                                <div className="mt-4 flex flex-wrap justify-center md:justify-start gap-2">
+                                    <span className="px-3 py-1 bg-indigo-500/10 text-indigo-500 text-[10px] font-black uppercase tracking-widest rounded-lg border border-indigo-500/10">
+                                        {company}
+                                    </span>
+                                    <span className="px-3 py-1 bg-emerald-500/10 text-emerald-600 text-[10px] font-black uppercase tracking-widest rounded-lg border border-emerald-500/10">
+                                        Verified Member
+                                    </span>
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
 

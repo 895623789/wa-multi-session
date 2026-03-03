@@ -68,29 +68,35 @@ export default function OwnerDashboard() {
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ delay: idx * 0.1 }}
                         key={stat.name}
-                        className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group"
+                        className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 relative overflow-hidden group cursor-pointer"
                     >
-                        <div className={`absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 rounded-full bg-opacity-5 rotate-12 transition-transform group-hover:scale-110 group-hover:rotate-45 ${stat.color === 'blue' ? 'bg-blue-600' :
-                                stat.color === 'indigo' ? 'bg-indigo-600' :
-                                    stat.color === 'emerald' ? 'bg-emerald-600' : 'bg-rose-600'
+                        {/* Decorative Blob - Fixed depth and opacity */}
+                        <div className={`absolute top-0 right-0 w-32 h-32 -mr-12 -mt-12 rounded-full transition-all duration-500 group-hover:scale-125 z-0 ${stat.color === 'blue' ? 'bg-blue-600/10' :
+                            stat.color === 'indigo' ? 'bg-indigo-600/10' :
+                                stat.color === 'emerald' ? 'bg-emerald-600/10' : 'bg-rose-600/10'
                             }`}></div>
 
-                        <div className="flex items-center justify-between mb-4">
-                            <div className={`p-3 rounded-2xl ${stat.color === 'blue' ? 'bg-blue-50 text-blue-600' :
+                        <div className="relative z-10">
+                            <div className="flex items-center justify-between mb-6">
+                                <div className={`p-3 rounded-2xl shadow-sm ${stat.color === 'blue' ? 'bg-blue-50 text-blue-600' :
                                     stat.color === 'indigo' ? 'bg-indigo-50 text-indigo-600' :
                                         stat.color === 'emerald' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
-                                }`}>
-                                <stat.icon size={22} />
+                                    }`}>
+                                    <stat.icon size={22} strokeWidth={2.5} />
+                                </div>
+                                <div className={`flex items-center gap-1.5 text-[11px] font-black px-3 py-1.5 rounded-xl shadow-sm transition-transform group-hover:scale-110 ${stat.trend === 'up' ? 'text-emerald-700 bg-emerald-100/80' : 'text-rose-700 bg-rose-100/80'
+                                    }`}>
+                                    {stat.trend === 'up' ? <ArrowUpRight size={12} strokeWidth={3} /> : <ArrowDownRight size={12} strokeWidth={3} />}
+                                    {stat.change}
+                                </div>
                             </div>
-                            <div className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full ${stat.trend === 'up' ? 'text-emerald-600 bg-emerald-50' : 'text-rose-600 bg-rose-50'
-                                }`}>
-                                {stat.trend === 'up' ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                                {stat.change}
+
+                            <div className="space-y-1">
+                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{stat.name}</p>
+                                <div className="flex items-baseline gap-1">
+                                    <h3 className="text-3xl font-black text-slate-900 font-outfit tracking-tighter">{stat.value}</h3>
+                                </div>
                             </div>
-                        </div>
-                        <div>
-                            <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">{stat.name}</p>
-                            <h3 className="text-3xl font-black text-slate-900 font-outfit">{stat.value}</h3>
                         </div>
                     </motion.div>
                 ))}
