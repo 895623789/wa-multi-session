@@ -23,63 +23,134 @@ import {
     LayoutDashboard
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { db } from "@/lib/firebase";
+import { doc, setDoc, serverTimestamp } from "firebase/firestore";
 
 const plans = [
     {
-        id: "free",
-        name: "Free Trial",
-        price: "₹0",
-        duration: "7 Days",
-        limits: {
-            maxContacts: 50,
-            maxMsgPerDay: 100,
-            aiReply: false,
-            agents: 1,
-            campaigns: 1
-        },
-        users: 852,
-        active: true,
-        color: "slate"
-    },
-    {
-        id: "basic",
-        name: "Basic Plan",
-        price: "₹999",
+        id: "personal",
+        name: "Personal Assistant",
+        price: "₹99",
         duration: "30 Days",
         limits: {
-            maxContacts: 500,
-            maxMsgPerDay: 1000,
+            maxMsgsPerDay: 200,
             aiReply: true,
-            agents: 2,
-            campaigns: 5
+            agents: 1,
+            apiAccess: false
         },
-        users: 1205,
+        users: 142,
         active: true,
         color: "indigo"
     },
     {
+        id: "starter",
+        name: "Business Starter",
+        price: "₹499",
+        duration: "30 Days",
+        limits: {
+            maxMsgsPerDay: 1000,
+            aiReply: true,
+            agents: 2,
+            apiAccess: false
+        },
+        users: 285,
+        active: true,
+        color: "blue"
+    },
+    {
         id: "pro",
-        name: "Pro Professional",
+        name: "Pro Scale (API)",
         price: "₹1,999",
         duration: "30 Days",
         limits: {
-            maxContacts: "Unlimited",
-            maxMsgPerDay: "Unlimited",
+            maxMsgsPerDay: 50000,
             aiReply: true,
             agents: 10,
-            campaigns: "Unlimited"
+            apiAccess: true
         },
-        users: 450,
+        users: 94,
         active: true,
         color: "emerald"
+    },
+    {
+        id: "custom",
+        name: "Custom Enterprise",
+        price: "Custom",
+        duration: "TBD",
+        limits: {
+            maxMsgsPerDay: "Unlimited",
+            aiReply: true,
+            agents: "Custom",
+            apiAccess: true
+        },
+        users: 12,
+        active: true,
+        color: "slate"
     }
 ];
 
 export default function PlansManagement() {
     const [isAddingPlan, setIsAddingPlan] = useState(false);
+    const [assignTarget, setAssignTarget] = useState({ uid: '', planId: 'personal' });
+    const [isAssigning, setIsAssigning] = useState(false);
+
+    const handleAssignPlan = async () => {
+        if (!assignTarget.uid) return alert("Enter User ID");
+        setIsAssigning(true);
+        try {
+            const expiryDate = new Date();
+            expiryDate.setDate(expiryDate.getDate() + 30);
+
+            await setDoc(doc(db, 'users', assignTarget.uid), {
+                subscription: {
+                    plan: assignTarget.planId,
+                    status: 'active',
+                    expiresAt: expiryDate,
+                    startedAt: serverTimestamp(),
+                }
+            }, { merge: true });
+            alert(`Plan ${assignTarget.planId} assigned to ${assignTarget.uid} successfully! ✨`);
+            setAssignTarget({ uid: '', planId: 'personal' });
+        } catch (err) {
+            console.error(err);
+            alert("Error assigning plan");
+        }
+        setIsAssigning(false);
+    };
 
     return (
         <div className="space-y-8">
+            <div className="bg-gradient-to-r from-indigo-600 to-violet-700 rounded-[32px] p-8 text-white shadow-xl shadow-indigo-200">
+                <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div className="space-y-2">
+                        <h2 className="text-2xl font-black font-outfit">Quick Plan Assistant ⚡</h2>
+                        <p className="text-indigo-100 text-sm font-medium">Instantly activate a plan for any user via their UID.</p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+                        <input
+                            type="text"
+                            placeholder="Enter User UID"
+                            value={assignTarget.uid}
+                            onChange={(e) => setAssignTarget({ ...assignTarget, uid: e.target.value })}
+                            className="bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-sm font-bold placeholder:text-white/40 focus:outline-none focus:bg-white/20 transition-all flex-1 min-w-[200px]"
+                        />
+                        <select
+                            value={assignTarget.planId}
+                            onChange={(e) => setAssignTarget({ ...assignTarget, planId: e.target.value })}
+                            className="bg-white/10 border border-white/20 rounded-2xl px-4 py-3 text-sm font-bold focus:outline-none focus:bg-white/20 transition-all appearance-none pr-10 relative"
+                        >
+                            {plans.map(p => <option key={p.id} value={p.id} className="text-slate-900">{p.name}</option>)}
+                        </select>
+                        <button
+                            onClick={handleAssignPlan}
+                            disabled={isAssigning}
+                            className="bg-white text-indigo-600 px-6 py-3 rounded-2xl font-black text-sm hover:bg-indigo-50 transition-all active:scale-95 disabled:opacity-50"
+                        >
+                            {isAssigning ? 'Activating...' : 'Activate Plan'}
+                        </button>
+                    </div>
+                </div>
+            </div>
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-black text-slate-900 tracking-tight font-outfit text-indigo-900">Manage Pricing Plans</h1>
@@ -142,35 +213,33 @@ export default function PlansManagement() {
                                 <span className="text-sm font-black text-slate-900 leading-none">{plan.users}</span>
                             </div>
 
-                            <div className="space-y-3 pt-2">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
-                                        <Smartphone size={14} className="text-indigo-400" />
-                                        <span>Max Contacts</span>
-                                    </div>
-                                    <span className="text-xs font-black text-slate-800 tracking-tight">{plan.limits.maxContacts}</span>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
+                                    <MessageCircle size={14} className="text-indigo-400" />
+                                    <span>Msgs / Day</span>
                                 </div>
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
-                                        <MessageCircle size={14} className="text-indigo-400" />
-                                        <span>Msgs / Day</span>
-                                    </div>
-                                    <span className="text-xs font-black text-slate-800 tracking-tight">{plan.limits.maxMsgPerDay}</span>
+                                <span className="text-xs font-black text-slate-800 tracking-tight">{plan.limits.maxMsgsPerDay}</span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
+                                    <Bot size={14} className="text-indigo-400" />
+                                    <span>AI Reply Agent</span>
                                 </div>
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
-                                        <Bot size={14} className="text-indigo-400" />
-                                        <span>AI Reply Agent</span>
-                                    </div>
-                                    {plan.limits.aiReply ? <Check size={16} className="text-emerald-500" /> : <X size={16} className="text-rose-400" />}
+                                {plan.limits.aiReply ? <Check size={16} className="text-emerald-500" /> : <X size={16} className="text-rose-400" />}
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
+                                    <Shield size={14} className="text-indigo-400" />
+                                    <span>API Access</span>
                                 </div>
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
-                                        <Shield size={14} className="text-indigo-400" />
-                                        <span>Max Agents</span>
-                                    </div>
-                                    <span className="text-xs font-black text-slate-800 tracking-tight">{plan.limits.agents}</span>
+                                {plan.limits.apiAccess ? <Check size={16} className="text-emerald-500" /> : <X size={16} className="text-rose-400" />}
+                            </div>
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
+                                    <Zap size={14} className="text-indigo-400" />
+                                    <span>Max Agents</span>
                                 </div>
+                                <span className="text-xs font-black text-slate-800 tracking-tight">{plan.limits.agents}</span>
                             </div>
                         </div>
 
@@ -218,27 +287,27 @@ export default function PlansManagement() {
                         <thead>
                             <tr className="bg-slate-50/50">
                                 <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Capability</th>
-                                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Free</th>
-                                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Basic</th>
-                                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 bg-indigo-50/50 text-indigo-600">Pro Professional</th>
+                                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Personal</th>
+                                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Starter</th>
+                                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 bg-emerald-50/50 text-emerald-600">Pro Scale</th>
+                                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Custom</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
                             {[
-                                { feat: "WA Sessions", free: "1", basic: "2", pro: "10" },
-                                { feat: "Contact Uploads", free: "50", basic: "500", pro: "Unlimited" },
-                                { feat: "Messages / Day", free: "100", basic: "1,000", pro: "Unlimited" },
-                                { feat: "Neural AI Engine", free: false, basic: true, pro: true },
-                                { feat: "Custom Branding", free: false, basic: false, pro: true },
-                                { feat: "API Access", free: false, basic: true, pro: true },
-                                { feat: "Campaign Schedulers", free: "1", basic: "5", pro: "Unlimited" },
-                                { feat: "Priority Support", free: false, basic: false, pro: true },
+                                { feat: "WA Sessions", pers: "1", start: "2", pro: "10", cust: "Custom" },
+                                { feat: "Messages / Day", pers: "200", start: "1,000", pro: "50,000", cust: "Unlimited" },
+                                { feat: "AI Engine", pers: true, start: true, pro: true, cust: true },
+                                { feat: "Bulk Messaging", pers: true, start: true, pro: true, cust: true },
+                                { feat: "API Access", pers: false, start: false, pro: true, cust: true },
+                                { feat: "Priority Support", pers: false, start: false, pro: true, cust: true },
                             ].map((row, i) => (
                                 <tr key={i} className="hover:bg-slate-50/50 transition-colors">
                                     <td className="px-8 py-4 text-sm font-bold text-slate-700">{row.feat}</td>
-                                    <td className="px-8 py-4 text-xs font-black text-slate-500">{typeof row.free === 'boolean' ? (row.free ? <Check className="text-emerald-500" size={16} /> : <X className="text-rose-400" size={16} />) : row.free}</td>
-                                    <td className="px-8 py-4 text-xs font-black text-slate-500">{typeof row.basic === 'boolean' ? (row.basic ? <Check className="text-emerald-500" size={16} /> : <X className="text-rose-400" size={16} />) : row.basic}</td>
-                                    <td className="px-8 py-4 text-xs font-black text-indigo-600 bg-indigo-50/20">{typeof row.pro === 'boolean' ? (row.pro ? <Check className="text-emerald-600" size={16} /> : <X className="text-rose-400" size={16} />) : row.pro}</td>
+                                    <td className="px-8 py-4 text-xs font-black text-slate-500">{typeof row.pers === 'boolean' ? (row.pers ? <Check className="text-emerald-500" size={16} /> : <X className="text-rose-400" size={16} />) : row.pers}</td>
+                                    <td className="px-8 py-4 text-xs font-black text-slate-500">{typeof row.start === 'boolean' ? (row.start ? <Check className="text-emerald-500" size={16} /> : <X className="text-rose-400" size={16} />) : row.start}</td>
+                                    <td className="px-8 py-4 text-xs font-black text-emerald-600 bg-emerald-50/20">{typeof row.pro === 'boolean' ? (row.pro ? <Check className="text-emerald-600" size={16} /> : <X className="text-rose-400" size={16} />) : row.pro}</td>
+                                    <td className="px-8 py-4 text-xs font-black text-slate-500">{typeof row.cust === 'boolean' ? (row.cust ? <Check className="text-emerald-500" size={16} /> : <X className="text-rose-400" size={16} />) : row.cust}</td>
                                 </tr>
                             ))}
                         </tbody>

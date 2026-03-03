@@ -21,7 +21,7 @@ import {
 } from "../Utils/save-media";
 import { WhatsappError } from "../Error";
 import { parseMessageStatusCodeToReadable } from "../Utils/message-status";
-import { getSQLiteSessionIds, SQLiteStore } from "../Store/Sqlite";
+import { getFirebaseSessionIds, FirebaseStore } from "../Store/Firebase";
 import { LegacyStore } from "../Store/Store";
 import { createDelay } from "../Utils/create-delay";
 
@@ -53,7 +53,7 @@ export const startSession = async (
 
   const { version } = await fetchLatestBaileysVersion();
   const startSocket = async () => {
-    const store = options.store || new SQLiteStore(sessionId);
+    const store = options.store || new FirebaseStore(sessionId);
     const sock: WASocket = makeWASocket({
       version,
       auth: store.state,
@@ -170,7 +170,7 @@ export const startSessionWithPairingCode = async (
   const { version } = await fetchLatestBaileysVersion();
   const startSocket = async () => {
     let isPairingCodeRequested = false;
-    const store = options.store || new SQLiteStore(sessionId);
+    const store = options.store || new FirebaseStore(sessionId);
     const sock: WASocket = makeWASocket({
       version,
       printQRInTerminal: false,
@@ -289,7 +289,7 @@ export const deleteSession = async (sessionId: string) => {
   try {
     await session?.sock.logout();
     await session?.store.deleteCreds();
-  } catch (error) {}
+  } catch (error) { }
   session?.sock.end(undefined);
   sessions.delete(sessionId);
 };
@@ -319,7 +319,7 @@ export const loadSessionsFromStorage = async (
   /**
    * TODO: improve this method to load sessions from other storage options
    */
-  const sessionIds = await getSQLiteSessionIds();
+  const sessionIds = await getFirebaseSessionIds();
   for (const sessionId of sessionIds) {
     const options = getOptions?.(sessionId);
     await startSession(sessionId, options || undefined);

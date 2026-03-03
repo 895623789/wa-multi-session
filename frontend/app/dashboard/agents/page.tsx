@@ -12,6 +12,7 @@ import QRCode from "react-qr-code";
 import { useAuth } from "@/components/AuthProvider";
 import { doc, updateDoc, arrayUnion, arrayRemove, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { useSubscription } from "@/lib/useSubscription";
 
 // ─── Interfaces ─────────────────────────────────────────────────────────────
 interface AgentConfig {
@@ -46,6 +47,7 @@ const ImageFallback = ({ type, role }: { type: string, role: string }) => {
 // ─── Main Page Component ────────────────────────────────────────────────────
 export default function UnifiedAgentsPage() {
     const { user } = useAuth();
+    const { subscription, isExpired, isActive, loading: subLoading } = useSubscription();
     const uid = user?.uid || '';
 
     const [agents, setAgents] = useState<AgentConfig[]>([]);
@@ -330,12 +332,28 @@ export default function UnifiedAgentsPage() {
                             </div>
                             <p className="text-slate-500 text-sm font-semibold tracking-tight">Deploying and managing your high-performance AI workforce.</p>
                         </div>
-                        <button
-                            onClick={() => { resetWizard(); setViewState('wizard'); }}
-                            className="bg-primary hover:bg-indigo-600 text-white px-8 py-3.5 rounded-2xl font-black flex items-center gap-2 transition-all shadow-xl shadow-primary/25 hover:-translate-y-1 active:scale-95"
-                        >
-                            <Plus className="w-5 h-5" /> Hire New Agent
-                        </button>
+                        <div className="flex flex-col items-end gap-2">
+                            <button
+                                onClick={() => {
+                                    if (isExpired) return showToast("Renew Required", "Your plan has expired. Please renew to hire more agents.", "error");
+                                    if (connectedSessions.length >= (subscription?.maxSessions || 1)) {
+                                        return showToast("Limit Reached", `Your ${subscription?.plan} plan allows max ${subscription?.maxSessions} active agents.`, "error");
+                                    }
+                                    resetWizard();
+                                    setViewState('wizard');
+                                }}
+                                disabled={isExpired || connectedSessions.length >= (subscription?.maxSessions || 1)}
+                                className={`px-8 py-3.5 rounded-2xl font-black flex items-center gap-2 transition-all shadow-xl hover:-translate-y-1 active:scale-95 ${(isExpired || connectedSessions.length >= (subscription?.maxSessions || 1))
+                                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                                        : 'bg-primary text-white shadow-primary/25 hover:bg-indigo-600'
+                                    }`}
+                            >
+                                <Plus className="w-5 h-5" /> Hire New Agent
+                            </button>
+                            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                                Capacity: <span className="text-slate-900 dark:text-white">{connectedSessions.length} / {subscription?.maxSessions || 1}</span> Agents
+                            </p>
+                        </div>
                     </div>
 
                     <div className="relative group">

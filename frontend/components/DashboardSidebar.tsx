@@ -31,9 +31,9 @@ export default function DashboardSidebar() {
 
     const links = [
         { name: "Home", href: "/dashboard", icon: LayoutDashboard },
+        { name: "AI", href: "/dashboard/ai", icon: Settings },
         { name: "Agents", href: "/dashboard/agents", icon: Bot },
         { name: "Campaigns", href: "/dashboard/campaigns", icon: Send },
-        { name: "Neural AI", href: "/dashboard/ai", icon: Settings },
         { name: "Profile", href: "/dashboard/profile", icon: User },
     ];
 

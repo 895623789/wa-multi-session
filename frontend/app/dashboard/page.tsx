@@ -37,7 +37,7 @@ export default function DashboardHome() {
     const quickActions = [
         { label: "Campaigns", icon: Send, color: "bg-gradient-to-br from-blue-400 to-blue-600", href: "/dashboard/campaigns" },
         { label: "Agents", icon: Bot, color: "bg-gradient-to-br from-indigo-400 to-indigo-600", href: "/dashboard/agents" },
-        { label: "Neural AI", icon: Zap, color: "bg-gradient-to-br from-amber-400 to-amber-600", href: "/dashboard/ai" },
+        { label: "AI", icon: Zap, color: "bg-gradient-to-br from-amber-400 to-amber-600", href: "/dashboard/ai" },
         { label: "Audience", icon: Users, color: "bg-gradient-to-br from-teal-400 to-teal-600", href: "#" },
     ];
 

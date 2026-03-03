@@ -26,6 +26,75 @@ const sessionStatuses = new Map<string, { status: string, qr?: string, pairingCo
 // Key: phone number (cleaned), Value: sessionId that owns it
 const phoneToSessionGuard = new Map<string, string>();
 
+// --- SaaS Subscription Logic ---
+import { getFirestore } from "firebase-admin/firestore";
+
+type PlanTier = 'personal' | 'starter' | 'pro' | 'custom';
+const PLAN_LIMITS: Record<PlanTier, { maxSessions: number, allowApi: boolean }> = {
+  personal: { maxSessions: 1, allowApi: false },
+  starter: { maxSessions: 2, allowApi: false },
+  pro: { maxSessions: 10, allowApi: true },
+  custom: { maxSessions: 100, allowApi: true }
+};
+
+const checkSubscription = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  let uid = req.body.uid || req.query.uid;
+  const sessionId = req.body.sessionId || req.query.sessionId || req.params.sessionId;
+
+  // If UID is missing but sessionId is present, extract UID from sessionId (format: uid_uuid)
+  if (!uid && sessionId) {
+    uid = sessionId.split('_')[0];
+  }
+
+  if (!uid) return res.status(400).json({ error: "Missing UID/SessionID identification" });
+
+  try {
+    const db = getFirestore();
+    const userDoc = await db.collection('users').doc(uid).get();
+
+    if (!userDoc.exists) {
+      // New user? Default to personal trial logic or just block if no plan assigned
+      // For now, let's be generous and treat missing doc as Personal (default).
+      // But in production, you should block or create a default trial.
+      return next();
+    }
+
+    const data = userDoc.data();
+    const sub = data?.subscription;
+
+    if (!sub || sub.status !== 'active') {
+      return res.status(402).json({ error: "No active subscription", code: "SUBSCRIPTION_REQUIRED" });
+    }
+
+    const expiresAt = sub.expiresAt.toDate();
+    if (new Date() > expiresAt) {
+      return res.status(402).json({ error: "Subscription expired", code: "SUBSCRIPTION_EXPIRED" });
+    }
+
+    // Check session limits (only for start session endpoints)
+    if (req.path.includes('/session/start')) {
+      const plan: PlanTier = sub.plan || 'personal';
+      const limits = PLAN_LIMITS[plan];
+
+      const sessionIds = await whatsapp.getSessionsIds();
+      // Only count sessions belonging to THIS user (sessions start with uid@)
+      const userSessions = sessionIds.filter(id => id.startsWith(`${uid}@`));
+
+      if (userSessions.length >= limits.maxSessions) {
+        return res.status(402).json({
+          error: `Plan limit reached. Your ${plan} plan allows max ${limits.maxSessions} sessions.`,
+          code: "LIMIT_REACHED"
+        });
+      }
+    }
+
+    next();
+  } catch (err) {
+    console.error("Subscription check error:", err);
+    next(); // Fail-safe (let them in if DB is down? or block? usually better to block but for UX we might let in)
+  }
+};
+
 // Initialize the WhatsApp engine with Firebase adapter
 const whatsapp = new Whatsapp({
   adapter: new FirebaseAdapter(),
@@ -103,6 +172,22 @@ const whatsapp = new Whatsapp({
     const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text;
 
     console.log(`[${msg.sessionId}] New Message from ${remoteJid}: ${text || "Media/Other"}`);
+
+    // --- SUBSCRIPTION CHECK FOR AI REPLIES ---
+    try {
+      const uidFromSession = msg.sessionId.split('_')[0]; // Format: uid_uuid
+      const userDoc = await getFirestore().collection('users').doc(uidFromSession).get();
+      const sub = userDoc.data()?.subscription;
+      const isExpired = sub?.expiresAt ? (new Date() > sub.expiresAt.toDate()) : false;
+
+      if (!sub || sub.status !== 'active' || isExpired) {
+        console.warn(`⚠️ [${msg.sessionId}] AI Reply blocked: Subscription ${sub?.status || 'missing'} (Expired: ${isExpired})`);
+        return;
+      }
+    } catch (subErr) {
+      console.error("AI Sub check failed:", subErr);
+      // Fail-open or close? Let's stay active for small glitches, but log it.
+    }
 
     // 2. Ignore messages sent by us (to prevent infinite loops) or messages without text
     if (isFromMe || !text || !remoteJid) return;
@@ -226,7 +311,7 @@ queue.startWorker().catch(err => console.error("Queue Start Error:", err));
  * POST http://localhost:3000/session/start
  * Body: { "sessionId": "my-user-1" }
  */
-app.post("/session/start", async (req, res) => {
+app.post("/session/start", checkSubscription, async (req, res) => {
   const { sessionId, uid, ownerNumber, instructions, businessInfo } = req.body;
   if (!sessionId) return res.status(400).json({ error: "sessionId is required" });
   // UID ownership check: if uid provided, sessionId MUST start with uid_
@@ -282,7 +367,7 @@ app.post("/session/start", async (req, res) => {
  * POST http://localhost:5000/session/start-pairing
  * Body: { "sessionId": "my-user-1", "phoneNumber": "91XXXXXXXXXX" }
  */
-app.post("/session/start-pairing", async (req, res) => {
+app.post("/session/start-pairing", checkSubscription, async (req, res) => {
   const { sessionId, uid, phoneNumber, ownerNumber, instructions, businessInfo } = req.body;
   if (!sessionId) return res.status(400).json({ error: "sessionId is required" });
   if (!phoneNumber) return res.status(400).json({ error: "phoneNumber is required" });
@@ -398,7 +483,7 @@ app.get("/session/status/:sessionId", (req, res) => {
  * POST http://localhost:3000/message/send
  * Body: { "sessionId": "my-user-1", "to": "91XXXXXXXXXX", "text": "Hello from API!" }
  */
-app.post("/message/send", async (req, res) => {
+app.post("/message/send", checkSubscription, async (req, res) => {
   const { sessionId, to, text } = req.body;
 
   if (!sessionId || !to || !text) {

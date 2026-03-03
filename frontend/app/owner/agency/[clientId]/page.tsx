@@ -58,6 +58,7 @@ export default function ClientManagement() {
     const [selectedCountry, setSelectedCountry] = useState({ name: "India", code: "91", flag: "🇮🇳", digits: 10 });
     const [activeSessionId, setActiveSessionId] = useState("");
     const [qrCode, setQrCode] = useState("");
+    const [isGenerating, setIsGenerating] = useState(false);
 
     const countries = [
         { name: "India", code: "91", flag: "🇮🇳", digits: 10 },
@@ -149,6 +150,7 @@ export default function ClientManagement() {
         setAuthMode(type);
         setQrCode("");
         setPairingCode("");
+        if (type === 'pairing') setIsGenerating(true);
 
         try {
             const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
@@ -161,10 +163,14 @@ export default function ClientManagement() {
             };
 
             if (type === 'pairing') {
-                if (!pairingNumber) return;
+                if (!pairingNumber) {
+                    setIsGenerating(false);
+                    return;
+                }
                 const fullNumber = selectedCountry.code + pairingNumber.replace(/\D/g, "");
                 if (pairingNumber.replace(/\D/g, "").length < selectedCountry.digits) {
                     alert(`Invalid number! ${selectedCountry.name} numbers usually have ${selectedCountry.digits} digits.`);
+                    setIsGenerating(false);
                     return;
                 }
                 body.phoneNumber = fullNumber;
@@ -184,11 +190,21 @@ export default function ClientManagement() {
                         if (sRes.ok) {
                             const sData = await sRes.json();
                             if (sData.qr) setQrCode(sData.qr);
-                            if (sData.pairingCode) setPairingCode(sData.pairingCode);
+                            if (sData.pairingCode) {
+                                setPairingCode(sData.pairingCode);
+                                setIsGenerating(false);
+                            }
                             if (sData.status === 'connected') {
                                 clearInterval(pollInterval);
                                 setViewState('list');
+                                setIsGenerating(false);
                                 fetchBackendSessions();
+                            }
+                            if (sData.status === 'disconnected' || sData.status === 'duplicate_rejected') {
+                                setIsGenerating(false);
+                                clearInterval(pollInterval);
+                                // don't close the modal immediately, let the user see it failed, or close it?
+                                // actually, we can leave it.
                             }
                         }
                     } catch (e) { }
@@ -198,11 +214,13 @@ export default function ClientManagement() {
             } else {
                 const errData = await res.json();
                 alert(`Error: ${errData.error || 'Failed to start session'}`);
+                setIsGenerating(false);
                 setViewState('list');
             }
         } catch (error) {
             console.error("Auth Flow Error:", error);
             alert("Connection Error: Backend unreachable");
+            setIsGenerating(false);
             setViewState('list');
         }
     };
@@ -289,51 +307,68 @@ export default function ClientManagement() {
                         </button>
                     </div>
 
-                    {/* Bot List */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Bot List Pipeline */}
+                    <div className="flex flex-col gap-4">
                         {agents.map((agent) => {
                             const isConnected = connectedSessions.includes(agent.id);
                             return (
                                 <motion.div
                                     key={agent.id}
                                     layout
-                                    className="bg-white rounded-[2rem] p-5 border border-slate-100 shadow-sm hover:shadow-xl transition-all duration-500 group relative overflow-hidden"
+                                    initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                                    className="bg-white rounded-[2rem] p-5 md:p-6 border border-slate-100 shadow-sm flex flex-col md:flex-row items-center gap-6 group hover:shadow-xl hover:border-indigo-600/20 transition-all duration-300"
                                 >
-                                    <div className="absolute top-0 right-0 w-24 h-24 bg-indigo-500/5 rounded-full blur-2xl -mr-12 -mt-12 group-hover:bg-indigo-500/10 transition-all" />
-
-                                    <div className="flex items-start justify-between mb-4 relative z-10">
-                                        <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-500">
-                                            <Bot size={24} />
+                                    {/* Identity Block */}
+                                    <div className="flex items-center gap-5 w-full md:w-1/3">
+                                        <div className="w-16 h-16 rounded-[1.25rem] bg-slate-50 flex items-center justify-center p-1.5 border-2 border-white shadow-inner overflow-hidden group-hover:scale-105 transition-transform shrink-0">
+                                            <div className="w-full h-full bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 border border-indigo-100/50">
+                                                <Bot size={24} />
+                                            </div>
                                         </div>
-                                        <div className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${isConnected ? 'bg-emerald-500/10 text-emerald-600' : 'bg-slate-100 text-slate-400'}`}>
-                                            {isConnected ? 'Connected' : 'Disconnected'}
+                                        <div className="truncate">
+                                            <h4 className="text-lg font-black text-slate-900 truncate">{agent.name}</h4>
+                                            <div className="flex items-center gap-2 mt-0.5">
+                                                <span className="text-[10px] font-black uppercase text-indigo-600 tracking-widest px-2 py-0.5 bg-indigo-50 border border-indigo-100 rounded-md truncate max-w-[120px]">{agent.role}</span>
+                                            </div>
                                         </div>
                                     </div>
 
-                                    <div className="mb-6 relative z-10">
-                                        <h4 className="font-black text-slate-900 group-hover:text-indigo-600 transition-colors">{agent.name}</h4>
-                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{agent.role}</p>
+                                    {/* Status Block */}
+                                    <div className="flex flex-col md:flex-row items-center justify-between md:justify-around flex-1 w-full border-y md:border-y-0 md:border-x border-slate-100 py-4 md:py-0 gap-4">
+                                        <div className="flex flex-col items-center">
+                                            <span className="text-[9px] font-black uppercase text-slate-400 tracking-tighter mb-1">Live Status</span>
+                                            {isConnected ? (
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                                                    <span className="text-emerald-500 text-xs font-black uppercase tracking-tight">Active</span>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="w-2 h-2 rounded-full bg-slate-300" />
+                                                    <span className="text-slate-400 text-xs font-black uppercase tracking-tight">Offline</span>
+                                                </div>
+                                            )}
+                                        </div>
                                     </div>
 
-                                    <div className="flex items-center gap-2 relative z-10">
+                                    {/* Actions Block */}
+                                    <div className="flex items-center gap-3 w-full md:w-auto justify-end shrink-0">
                                         {!isConnected ? (
                                             <button
                                                 onClick={() => startAuthFlow(agent.id)}
-                                                className="flex-1 h-10 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-indigo-700 active:scale-95 transition-all shadow-lg shadow-indigo-100"
+                                                className="px-5 py-3 h-[44px] bg-indigo-600 text-white rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-indigo-700 active:scale-95 transition-all shadow-lg shadow-indigo-100 whitespace-nowrap"
                                             >
-                                                <QrCode size={14} />
-                                                Connect Unit
+                                                <QrCode size={14} /> Connect
                                             </button>
                                         ) : (
                                             <button
                                                 onClick={() => disconnectAgent(agent.id)}
-                                                className="flex-1 h-10 bg-rose-50 text-rose-600 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-rose-100 transition-all border border-rose-100"
+                                                className="px-5 py-3 h-[44px] bg-rose-50 text-rose-600 rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-rose-100 active:scale-95 transition-all border border-rose-100 whitespace-nowrap"
                                             >
-                                                <Power size={14} />
-                                                Disconnect
+                                                <Power size={14} /> Disconnect
                                             </button>
                                         )}
-                                        <button className="w-10 h-10 bg-slate-50 text-slate-400 rounded-xl flex items-center justify-center hover:bg-slate-100 transition-all active:scale-95">
+                                        <button className="w-[44px] h-[44px] bg-slate-50 text-slate-400 rounded-2xl flex items-center justify-center hover:text-indigo-600 hover:bg-indigo-50 transition-all active:scale-90 shrink-0" title="Edit Agent Settings">
                                             <Edit size={16} />
                                         </button>
                                     </div>
@@ -453,10 +488,16 @@ export default function ClientManagement() {
                                                 </div>
                                             </div>
                                             <button
-                                                disabled={pairingNumber.length < selectedCountry.digits}
+                                                disabled={pairingNumber.length < selectedCountry.digits || isGenerating}
                                                 onClick={() => startAuthFlow(activeSessionId, 'pairing')}
-                                                className={`w-full py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-xl ${pairingNumber.length < selectedCountry.digits ? 'bg-slate-100 text-slate-400 grayscale cursor-not-allowed' : 'bg-slate-900 text-white hover:bg-indigo-600 shadow-indigo-100'}`}
-                                            >Generate Code</button>
+                                                className={`w-full py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all active:scale-95 shadow-xl ${(pairingNumber.length < selectedCountry.digits || isGenerating) ? 'bg-slate-100 text-slate-400 grayscale cursor-not-allowed' : 'bg-slate-900 text-white hover:bg-indigo-600 shadow-indigo-100'}`}
+                                            >
+                                                {isGenerating ? (
+                                                    <span className="flex items-center justify-center gap-2">
+                                                        <RefreshCw className="w-3 h-3 animate-spin py-0 my-0" /> Generating Code...
+                                                    </span>
+                                                ) : "Generate Code"}
+                                            </button>
                                         </div>
                                     ) : (
                                         <div className="p-8 bg-indigo-600 rounded-[2.5rem] shadow-xl shadow-indigo-100 flex flex-col items-center">

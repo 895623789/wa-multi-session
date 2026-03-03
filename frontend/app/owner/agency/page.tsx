@@ -119,18 +119,18 @@ export default function AgencyPortal() {
                 </div>
             </div>
 
-            {/* Client Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {/* Client List */}
+            <div className="flex flex-col gap-4">
                 {isLoading ? (
                     Array(3).fill(0).map((_, i) => (
-                        <div key={i} className="h-64 bg-slate-100 rounded-[32px] animate-pulse" />
+                        <div key={i} className="h-32 bg-slate-100 rounded-[2rem] animate-pulse" />
                     ))
                 ) : filteredClients.length > 0 ? (
                     filteredClients.map((client) => (
-                        <ClientCard key={client.id} client={client} onDelete={deleteClient} />
+                        <ClientCard key={client.id} client={client} onDeleteClick={(c) => setDeleteModal({ isOpen: true, client: c, lang: 'hi' })} />
                     ))
                 ) : (
-                    <div className="col-span-full py-20 flex flex-col items-center justify-center bg-slate-50 border-2 border-dashed border-slate-200 rounded-[40px] text-center">
+                    <div className="w-full py-20 flex flex-col items-center justify-center bg-slate-50 border-2 border-dashed border-slate-200 rounded-[3rem] text-center">
                         <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-sm mb-4">
                             <Briefcase className="text-slate-300" size={32} />
                         </div>
@@ -139,6 +139,60 @@ export default function AgencyPortal() {
                     </div>
                 )}
             </div>
+
+            {/* Professional Delete Modal */}
+            <AnimatePresence>
+                {deleteModal.isOpen && (
+                    <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+                            onClick={() => setDeleteModal({ ...deleteModal, isOpen: false })}
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 30 }}
+                            className="relative w-full max-w-md bg-white rounded-[3rem] p-10 shadow-2xl overflow-hidden"
+                        >
+                            <div className="absolute top-0 left-0 w-full h-2 bg-rose-500" />
+                            <div className="flex justify-between items-start mb-8">
+                                <div className="w-16 h-16 bg-rose-50 rounded-[1.5rem] flex items-center justify-center text-rose-500 shadow-inner">
+                                    <AlertCircle className="w-9 h-9" />
+                                </div>
+                                <button
+                                    onClick={() => setDeleteModal({ ...deleteModal, lang: deleteModal.lang === 'hi' ? 'en' : 'hi' })}
+                                    className="flex items-center gap-2 px-4 py-2 bg-slate-50 rounded-full text-[9px] font-black uppercase text-slate-500 hover:text-indigo-600 transition-all border border-slate-100 shadow-sm"
+                                >
+                                    {deleteModal.lang === 'hi' ? "Translate to EN" : "हिंदी में देखें"}
+                                </button>
+                            </div>
+
+                            <h3 className="text-3xl font-black text-slate-900 mb-4 font-outfit leading-tight">
+                                {deleteModal.lang === 'hi' ? "क्लाइंट डिलीट करें?" : "Delete Client?"}
+                            </h3>
+                            <p className="text-slate-500 text-sm font-bold leading-relaxed mb-10">
+                                {deleteModal.lang === 'hi'
+                                    ? `क्या आप वाकई "${deleteModal.client?.businessName}" को डिलीट करना चाहते हैं? इससे उनका सारा डेटा हट जाएगा।`
+                                    : `Are you sure you want to delete "${deleteModal.client?.businessName}"? This action is irreversible.`}
+                            </p>
+
+                            <div className="flex flex-col gap-3">
+                                <button
+                                    onClick={() => deleteClient(deleteModal.client!.id)}
+                                    className="w-full py-4 bg-rose-500 hover:bg-rose-600 text-white rounded-[1.25rem] font-black shadow-xl shadow-rose-500/20 transition-all hover:-translate-y-1 active:scale-95 text-xs uppercase tracking-widest"
+                                >
+                                    {deleteModal.lang === 'hi' ? "हाँ, डिलीट करें" : "Confirm Delete"}
+                                </button>
+                                <button
+                                    onClick={() => setDeleteModal({ ...deleteModal, isOpen: false })}
+                                    className="w-full py-4 bg-slate-50 text-slate-500 hover:text-slate-900 rounded-[1.25rem] font-black transition-all hover:bg-slate-100 text-xs uppercase tracking-widest"
+                                >
+                                    {deleteModal.lang === 'hi' ? "नहीं, वापस जाएं" : "Cancel"}
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
 
             {/* Add Client Modal */}
             <AnimatePresence>
@@ -250,76 +304,75 @@ export default function AgencyPortal() {
     );
 }
 
-function ClientCard({ client, onDelete }: { client: AgencyClient, onDelete: (id: string) => void }) {
+function ClientCard({ client, onDeleteClick }: { client: AgencyClient, onDeleteClick: (client: AgencyClient) => void }) {
     return (
         <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="group bg-white rounded-[32px] p-6 border border-slate-100 shadow-sm hover:shadow-2xl hover:shadow-indigo-500/10 transition-all duration-500 hover:-translate-y-1 overflow-hidden relative"
+            layout
+            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+            className="bg-white rounded-[2rem] p-5 md:p-6 border border-slate-100 shadow-sm flex flex-col md:flex-row items-center gap-6 group hover:shadow-xl hover:border-indigo-600/20 transition-all duration-300"
         >
-            {/* Background Glow */}
-            <div className="absolute -top-12 -right-12 w-32 h-32 bg-indigo-500/5 rounded-full blur-3xl group-hover:bg-indigo-500/10 transition-all duration-700" />
-
-            {/* Content */}
-            <div className="relative z-10">
-                <div className="flex items-start justify-between mb-4">
-                    <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 font-black text-xl border border-indigo-100 group-hover:bg-indigo-600 group-hover:text-white transition-all duration-500">
+            {/* Identity Block */}
+            <div className="flex items-center gap-5 w-full md:w-1/3">
+                <div className="w-16 h-16 rounded-[1.25rem] bg-slate-50 flex items-center justify-center p-1.5 border-2 border-white shadow-inner overflow-hidden group-hover:scale-105 transition-transform shrink-0">
+                    <div className="w-full h-full bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-600 font-black text-xl border border-indigo-100/50">
                         {client.name.charAt(0)}
                     </div>
+                </div>
+                <div className="truncate">
+                    <h4 className="text-lg font-black text-slate-900 truncate">{client.businessName}</h4>
+                    <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[10px] font-black uppercase text-indigo-600 tracking-widest px-2 py-0.5 bg-indigo-50 border border-indigo-100 rounded-md truncate max-w-[120px]">{client.name}</span>
+                        <span className="text-[10px] font-bold text-slate-400 truncate flex items-center gap-1"><MapPin size={10} /> {client.location || 'Remote'}</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Status Block */}
+            <div className="flex items-center justify-between md:justify-around flex-1 w-full border-y md:border-y-0 md:border-x border-slate-100 py-4 md:py-0 gap-4">
+                <div className="flex flex-col">
+                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-tighter mb-1">Monthly Fee</span>
                     <div className="flex items-center gap-1">
-                        <button className="p-2 text-slate-300 hover:text-indigo-600 transition-colors">
-                            <Edit size={16} />
-                        </button>
-                        <button
-                            onClick={() => onDelete(client.id)}
-                            className="p-2 text-slate-300 hover:text-rose-600 transition-colors"
-                        >
-                            <Trash2 size={16} />
-                        </button>
+                        <IndianRupee className="text-emerald-500" size={14} />
+                        <span className="text-slate-900 text-sm font-black">{client.monthlyFee}</span>
                     </div>
                 </div>
-
-                <div className="mb-4">
-                    <h3 className="text-lg font-black text-slate-900 leading-tight group-hover:text-indigo-600 transition-colors">{client.businessName}</h3>
-                    <p className="text-sm font-bold text-slate-400">{client.name}</p>
-                </div>
-
-                <div className="space-y-2 mb-6">
-                    <div className="flex items-center gap-2 text-[11px] font-black text-slate-500 uppercase tracking-tight">
-                        <MapPin size={14} className="text-indigo-500" />
-                        <span>{client.location || 'Remote'}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-[11px] font-black text-slate-500 uppercase tracking-tight">
-                        <IndianRupee size={14} className="text-emerald-500" />
-                        <span>₹{client.monthlyFee} <span className="text-[9px] text-slate-300">/ MONTH</span></span>
-                    </div>
-                    <div className="flex items-center gap-2 text-[11px] font-black text-slate-500 uppercase tracking-tight">
-                        <Calendar size={14} className="text-amber-500" />
-                        <span>Since {client.startDate?.toDate ? client.startDate.toDate().toLocaleDateString() : 'N/A'}</span>
+                <div className="flex flex-col">
+                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-tighter mb-1">Bots Connected</span>
+                    <div className="flex items-center gap-1.5">
+                        <Bot className="text-slate-400" size={14} />
+                        <span className="text-slate-900 text-sm font-black">?</span>
                     </div>
                 </div>
-
-                {/* Tracking & Manage */}
-                <div className="flex items-center gap-2 mb-6">
-                    <div className="flex-1 bg-slate-50 rounded-2xl p-3 flex flex-col items-center justify-center border border-slate-100">
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Bots</span>
-                        <span className="text-base font-black text-slate-900">0</span>
-                    </div>
-                    <div className="flex-1 bg-slate-50 rounded-2xl p-3 flex flex-col items-center justify-center border border-slate-100">
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Status</span>
-                        <div className="flex items-center gap-1 text-emerald-600 mt-0.5">
-                            <CheckCircle2 size={12} strokeWidth={3} />
-                            <span className="text-[10px] font-black uppercase">Active</span>
-                        </div>
+                <div className="flex flex-col">
+                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-tighter mb-1">Status</span>
+                    <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                        <span className="text-emerald-500 text-xs font-black uppercase tracking-tight">Active</span>
                     </div>
                 </div>
+            </div>
 
+            {/* Actions Block */}
+            <div className="flex items-center gap-3 w-full md:w-auto justify-end shrink-0">
+                <button
+                    className="p-3 rounded-2xl bg-slate-50 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all active:scale-90"
+                    title="Edit Client"
+                >
+                    <Edit className="w-5 h-5" />
+                </button>
+                <button
+                    onClick={() => onDeleteClick(client)}
+                    className="p-3 rounded-2xl bg-slate-50 text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all active:scale-90"
+                    title="Delete Client"
+                >
+                    <Trash2 className="w-5 h-5" />
+                </button>
                 <Link
                     href={`/owner/agency/${client.id}`}
-                    className="w-full h-11 bg-white border border-slate-200 hover:border-indigo-600 hover:bg-indigo-50 text-slate-900 hover:text-indigo-600 rounded-2xl font-black text-xs flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.98]"
+                    className="px-5 py-3 h-[44px] bg-slate-900 text-white hover:bg-indigo-600 rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-xl shadow-slate-900/10 active:scale-95 whitespace-nowrap"
                 >
                     <Bot size={16} />
-                    Manage Bot System
+                    Manage Bots
                 </Link>
             </div>
         </motion.div>

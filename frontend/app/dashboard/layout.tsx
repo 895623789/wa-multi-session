@@ -8,12 +8,13 @@ import { useAuth } from "@/components/AuthProvider";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { LayoutDashboard, MessageCircle, Send, Settings, LogOut, User, Bot } from "lucide-react";
+import SubscriptionBanner from "@/components/SubscriptionBanner";
 
 const mobileNavLinks = [
     { name: "Home", href: "/dashboard", icon: LayoutDashboard },
+    { name: "AI", href: "/dashboard/ai", icon: Settings },
     { name: "Agents", href: "/dashboard/agents", icon: Bot },
     { name: "Campaigns", href: "/dashboard/campaigns", icon: Send },
-    { name: "AI", href: "/dashboard/ai", icon: Settings },
     { name: "Profile", href: "/dashboard/profile", icon: User },
 ];
 
@@ -82,6 +83,7 @@ export default function DashboardLayout({
 
     return (
         <div className="flex h-screen overflow-x-visible" style={{ background: 'var(--bg)', color: 'var(--text-primary)' }}>
+            <SubscriptionBanner />
             <DashboardSidebar />
             <div className="flex flex-col flex-1 min-w-0 h-full">
                 <main className={mainClasses}>
