@@ -141,7 +141,8 @@ export default function SessionsPage() {
     const fetchSessions = useCallback(async () => {
         if (!uid) return;
         try {
-            const res = await fetch(`http://localhost:5000/session/list?uid=${uid}`);
+            const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+            const res = await fetch(`${baseUrl}/session/list?uid=${uid}`);
             const data = await res.json();
             setSessions(data.sessions || []);
         } catch (e) {
@@ -157,7 +158,8 @@ export default function SessionsPage() {
         if (!modalSession || !uid) return;
         setDisconnecting(true);
         try {
-            await fetch(`http://localhost:5000/session/delete/${modalSession}?uid=${uid}`, { method: "DELETE" });
+            const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+            await fetch(`${baseUrl}/session/delete/${modalSession}?uid=${uid}`, { method: "DELETE" });
             // Remove from Firestore user doc
             await updateDoc(doc(db, "users", uid), { sessions: arrayRemove(modalSession) });
             setModalSession(null);
@@ -179,7 +181,8 @@ export default function SessionsPage() {
         setQrCode("");
 
         try {
-            const res = await fetch("http://localhost:5000/session/start", {
+            const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+            const res = await fetch(`${baseUrl}/session/start`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ sessionId: scopedId, uid })
@@ -202,7 +205,8 @@ export default function SessionsPage() {
 
         const interval = setInterval(async () => {
             try {
-                const res = await fetch(`http://localhost:5000/session/status/${fullSessionId}`);
+                const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+                const res = await fetch(`${baseUrl}/session/status/${fullSessionId}`);
                 const statusData = await res.json();
 
                 if (statusData.qr) {
