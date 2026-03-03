@@ -12,7 +12,8 @@ import {
     Ticket,
     Settings,
     ClipboardList,
-    RefreshCcw
+    RefreshCcw,
+    Briefcase
 } from "lucide-react";
 
 function cn(...classes: (string | boolean | undefined)[]) {
@@ -26,6 +27,7 @@ export default function OwnerMobileNav() {
         { name: "Dashboard", href: "/owner/dashboard", icon: LayoutDashboard },
         { name: "Users", href: "/owner/users", icon: Users },
         { name: "Subs", href: "/owner/subscriptions", icon: CreditCard },
+        { name: "Agency", href: "/owner/agency", icon: Briefcase },
         { name: "Plans", href: "/owner/plans", icon: Package },
         { name: "Pay", href: "/owner/payments", icon: IndianRupee },
         { name: "News", href: "/owner/announcements", icon: Bell },

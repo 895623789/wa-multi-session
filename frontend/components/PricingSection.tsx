@@ -4,51 +4,50 @@ import { Check } from "lucide-react";
 export default function PricingSection() {
     const plans = [
         {
+            name: "Personal Assistant",
+            desc: "Your dedicated AI companion for personal productivity.",
+            price: "₹99",
+            period: "/month",
+            features: [
+                "1 Fixed WhatsApp Number",
+                "Personal Task Reminders",
+                "Medication/Daily Alerts",
+                "Basic AI Chat",
+                "Standard Response Time"
+            ],
+            cta: "Start Assistant",
+            highlight: false
+        },
+        {
             name: "Starter",
-            desc: "Perfect for small businesses and independent marketers.",
-            price: "$29",
+            desc: "Perfect for small businesses starting with automation.",
+            price: "₹499",
             period: "/month",
             features: [
-                "Up to 3 WhatsApp Instances",
-                "5,000 Messages/month",
-                "Standard Anti-Ban Delay",
-                "Basic Analytics",
-                "Community Support"
-            ],
-            cta: "Start Free Trial",
-            highlight: false
-        },
-        {
-            name: "Professional",
-            desc: "For growing teams that need raw volume and automation.",
-            price: "$79",
-            period: "/month",
-            features: [
-                "Up to 10 WhatsApp Instances",
-                "50,000 Messages/month",
-                "Advanced AI Anti-Ban",
-                "Real-time Read Analytics",
-                "Auto-Reply Chatbots",
-                "Priority Support"
-            ],
-            cta: "Get Professional",
-            highlight: true
-        },
-        {
-            name: "Enterprise",
-            desc: "Uncapped scaling for marketing agencies and large teams.",
-            price: "$199",
-            period: "/month",
-            features: [
-                "Unlimited Instances",
+                "1 WhatsApp Agent",
                 "Unlimited Messages",
-                "Dedicated Account Manager",
-                "Custom Workflow Integration",
-                "White-label Dashboard",
-                "24/7 Phone Support"
+                "7-Day Free Trial",
+                "Business Hours Support",
+                "Basic AI Training"
             ],
-            cta: "Contact Sales",
+            cta: "Try Free for 7 Days",
             highlight: false
+        },
+        {
+            name: "Pro Plan",
+            desc: "Advanced neural agents for high-growth businesses.",
+            price: "₹1,999",
+            period: "/month",
+            features: [
+                "3 WhatsApp Agents",
+                "Unlimited AI Replies",
+                "Team Collaboration",
+                "Priority Neural Processing",
+                "Custom System Instructions",
+                "24/7 Dedicated Support"
+            ],
+            cta: "Go Pro Now",
+            highlight: true
         }
     ];
 

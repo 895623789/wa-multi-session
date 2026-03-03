@@ -20,7 +20,7 @@ app.use(express.json());
 app.use(express.static("public"));
 
 // Store session status in memory for the frontend test page
-const sessionStatuses = new Map<string, { status: string, qr?: string }>();
+const sessionStatuses = new Map<string, { status: string, qr?: string, pairingCode?: string }>();
 
 // Guard: Track phone numbers to prevent duplicate connections
 // Key: phone number (cleaned), Value: sessionId that owns it
@@ -33,6 +33,10 @@ const whatsapp = new Whatsapp({
   onConnecting: (sessionId) => {
     console.log(`[${sessionId}] Connecting...`);
     sessionStatuses.set(sessionId, { status: 'connecting' });
+  },
+  onPairingCode: (sessionId, code) => {
+    console.log(`[${sessionId}] Pairing Code: ${code}`);
+    sessionStatuses.set(sessionId, { status: 'pairing_code', pairingCode: code });
   },
   onConnected: async (sessionId) => {
     console.log(`[${sessionId}] Connected`);
@@ -225,9 +229,15 @@ queue.startWorker().catch(err => console.error("Queue Start Error:", err));
 app.post("/session/start", async (req, res) => {
   const { sessionId, uid, ownerNumber, instructions, businessInfo } = req.body;
   if (!sessionId) return res.status(400).json({ error: "sessionId is required" });
-  // UID ownership: if uid provided, sessionId MUST start with uid_
-  if (uid && !sessionId.startsWith(`${uid}_`)) {
-    return res.status(403).json({ error: "Session ID does not belong to this user." });
+  // UID ownership check: if uid provided, sessionId MUST start with uid_
+  // Special handling for Agency Portal to support legacy "agent_" IDs created during initial dev
+  const isAgencyUid = uid?.startsWith('agency_');
+  const hasValidPrefix = sessionId.startsWith(`${uid}_`);
+  const isLegacyAgencyAgent = isAgencyUid && sessionId.startsWith('agent_');
+
+  if (uid && !hasValidPrefix && !isLegacyAgencyAgent) {
+    console.warn(`🛑 403 Access Denied: Mismatch between UID [${uid}] and Session ID [${sessionId}]. Prefix [${uid}_] expected.`);
+    return res.status(403).json({ error: `Session ownership mismatch. UID [${uid}] cannot manage [${sessionId}].` });
   }
 
   try {
@@ -253,8 +263,8 @@ app.post("/session/start", async (req, res) => {
     });
 
     // Save custom AI personality data
-    if (instructions) await (whatsapp as any).adapter.saveData(sessionId, 'instructions', instructions);
-    if (businessInfo) await (whatsapp as any).adapter.saveData(sessionId, 'businessInfo', businessInfo);
+    if (instructions) await (whatsapp as any).adapter.writeData(sessionId, 'instructions', 'config', instructions);
+    if (businessInfo) await (whatsapp as any).adapter.writeData(sessionId, 'businessInfo', 'config', businessInfo);
     res.json({
       message: `Session ${sessionId} started.`,
       instruction: "Please scan the QR code displayed on the page."
@@ -263,6 +273,57 @@ app.post("/session/start", async (req, res) => {
     if (error.message.includes('already exist')) {
       return res.json({ message: `Session ${sessionId} is resuming...` });
     }
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Start a new WhatsApp session with Pairing Code
+ * POST http://localhost:5000/session/start-pairing
+ * Body: { "sessionId": "my-user-1", "phoneNumber": "91XXXXXXXXXX" }
+ */
+app.post("/session/start-pairing", async (req, res) => {
+  const { sessionId, uid, phoneNumber, ownerNumber, instructions, businessInfo } = req.body;
+  if (!sessionId) return res.status(400).json({ error: "sessionId is required" });
+  if (!phoneNumber) return res.status(400).json({ error: "phoneNumber is required" });
+
+  // UID ownership check
+  const isAgencyUid = uid?.startsWith('agency_');
+  const hasValidPrefix = sessionId.startsWith(`${uid}_`);
+  const isLegacyAgencyAgent = isAgencyUid && sessionId.startsWith('agent_');
+
+  if (uid && !hasValidPrefix && !isLegacyAgencyAgent) {
+    console.warn(`🛑 403 Access Denied (Pairing): Mismatch between UID [${uid}] and Session ID [${sessionId}]. Prefix [${uid}_] expected.`);
+    return res.status(403).json({ error: `Session ownership mismatch. UID [${uid}] cannot manage [${sessionId}].` });
+  }
+
+  try {
+    const existing = await whatsapp.getSessionById(sessionId);
+    if (existing) {
+      if (existing.status === 'connected') {
+        return res.json({ message: `Session ${sessionId} is already active.` });
+      } else {
+        await whatsapp.deleteSession(sessionId);
+      }
+    }
+
+    await whatsapp.startSessionWithPairingCode(sessionId, {
+      phoneNumber: phoneNumber,
+      onPairingCode: (code) => {
+        sessionStatuses.set(sessionId, { status: 'pairing_code', pairingCode: code });
+      }
+    });
+
+    // Save custom AI personality data
+    if (instructions) await (whatsapp as any).adapter.writeData(sessionId, 'instructions', 'config', instructions);
+    if (businessInfo) await (whatsapp as any).adapter.writeData(sessionId, 'businessInfo', 'config', businessInfo);
+    if (ownerNumber) await (whatsapp as any).adapter.writeData(sessionId, 'ownerNumber', 'config', ownerNumber);
+
+    res.json({
+      message: `Pairing code request initiated for ${phoneNumber}.`,
+      instruction: "Please wait for the pairing code to be generated."
+    });
+  } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
@@ -468,6 +529,6 @@ app.post("/admin/upload-to-storage", upload.single('file'), async (req: any, res
 
 app.listen(port, () => {
   console.log("--------------------------------------------------");
-  console.log(`🚀 BulkReply.io API is running at http://localhost:${port}`);
+  console.log(`🚀 BulkReply.io API (Agency-Relaxed v2) running at http://localhost:${port}`);
   console.log("--------------------------------------------------");
 });
