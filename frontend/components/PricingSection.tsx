@@ -4,50 +4,49 @@ import { Check } from "lucide-react";
 export default function PricingSection() {
     const plans = [
         {
-            name: "Personal Assistant",
-            desc: "Your dedicated AI companion for personal productivity.",
+            name: "Assistant Plan",
+            desc: "A dedicated AI for YOUR personal life & tasks.",
             price: "₹99",
             period: "/month",
             features: [
-                "1 Fixed WhatsApp Number",
-                "Personal Task Reminders",
-                "Medication/Daily Alerts",
-                "Basic AI Chat",
-                "Standard Response Time"
+                "1 Personal AI Assistant",
+                "Replies ONLY to Owner",
+                "Daily Task Reminders",
+                "WhatsApp Bot Manager",
+                "7-Day Free Trial"
             ],
             cta: "Start Assistant",
             highlight: false
         },
         {
-            name: "Starter",
-            desc: "Perfect for small businesses starting with automation.",
+            name: "Standard Plan",
+            desc: "Perfect for growing teams and small businesses.",
             price: "₹499",
             period: "/month",
             features: [
-                "1 WhatsApp Agent",
+                "2 Personal Assistants",
+                "3 Business Neural Bots",
                 "Unlimited Messages",
-                "7-Day Free Trial",
-                "Business Hours Support",
-                "Basic AI Training"
+                "WhatsApp Marketing Tools",
+                "7-Day Free Trial"
             ],
-            cta: "Try Free for 7 Days",
-            highlight: false
+            cta: "Go Standard",
+            highlight: true
         },
         {
-            name: "Pro Plan",
-            desc: "Advanced neural agents for high-growth businesses.",
+            name: "Elite Plan",
+            desc: "Maximum power for high-scale automation.",
             price: "₹1,999",
             period: "/month",
             features: [
-                "3 WhatsApp Agents",
-                "Unlimited AI Replies",
-                "Team Collaboration",
-                "Priority Neural Processing",
-                "Custom System Instructions",
-                "24/7 Dedicated Support"
+                "10+ Personal Assistants",
+                "15+ Business Bots",
+                "Developer API Access",
+                "Daily API Quota: 25 calls",
+                "24/7 Dedicated Priority"
             ],
-            cta: "Go Pro Now",
-            highlight: true
+            cta: "Go Elite",
+            highlight: false
         }
     ];
 

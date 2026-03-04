@@ -11,17 +11,19 @@ export default function DashboardHome() {
 
     useEffect(() => {
         const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
-        fetch(`${baseUrl}/session/list`)
+        fetch(`${baseUrl}/session/list`).catch(() => null)
             .then(res => {
-                if (!res.ok) {
+                if (!res || !res.ok) {
                     setBackendStatus("Connection Failed");
-                    return Promise.reject('Network response was not ok');
+                    return null;
                 }
                 setBackendStatus("Connected to API");
                 return res.json();
             })
             .then(data => {
-                setSessions(data.sessions || []);
+                if (data) {
+                    setSessions(data.sessions || []);
+                }
                 setLoading(false);
             })
             .catch(error => {

@@ -26,6 +26,21 @@ export default function SignupPage() {
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
+    const [defaultTrialDays, setDefaultTrialDays] = useState(7);
+
+    React.useEffect(() => {
+        const fetchConfig = async () => {
+            try {
+                const snap = await getDoc(doc(db, "platform_config", "general"));
+                if (snap.exists() && snap.data().defaultTrialDays !== undefined) {
+                    setDefaultTrialDays(snap.data().defaultTrialDays);
+                }
+            } catch (err) {
+                console.error("Failed to fetch trial config:", err);
+            }
+        };
+        fetchConfig();
+    }, []);
 
     const handleSignup = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -39,6 +54,9 @@ export default function SignupPage() {
             });
 
             // Create Firestore user document (1 write)
+            const expiryDate = new Date();
+            expiryDate.setDate(expiryDate.getDate() + defaultTrialDays); // dynamic free trial
+
             await setDoc(doc(db, "users", userCredential.user.uid), {
                 displayName: `${firstName} ${lastName}`,
                 email: email,
@@ -50,7 +68,12 @@ export default function SignupPage() {
                 role: "",
                 location: "",
                 onboardingComplete: false,
-                plan: "free",
+                subscription: {
+                    status: 'active',
+                    plan: 'starter',
+                    startedAt: serverTimestamp(),
+                    expiresAt: expiryDate
+                },
                 sessions: [],
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp()
@@ -77,6 +100,9 @@ export default function SignupPage() {
 
             if (!userDoc.exists()) {
                 // If new user via Google, create the document first
+                const expiryDate = new Date();
+                expiryDate.setDate(expiryDate.getDate() + defaultTrialDays); // dynamic free trial
+
                 await setDoc(doc(db, "users", user.uid), {
                     displayName: user.displayName || "",
                     email: user.email || "",
@@ -88,7 +114,12 @@ export default function SignupPage() {
                     role: "",
                     location: "",
                     onboardingComplete: false,
-                    plan: "free",
+                    subscription: {
+                        status: 'active',
+                        plan: 'starter',
+                        startedAt: serverTimestamp(),
+                        expiresAt: expiryDate
+                    },
                     sessions: [],
                     createdAt: serverTimestamp(),
                     updatedAt: serverTimestamp()

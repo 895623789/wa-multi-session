@@ -108,7 +108,9 @@ export async function generateAutoReply(
     customInstructions?: string,
     businessInfo?: string,
     sessionId: string = '',
-    remoteJid: string = ''
+    remoteJid: string = '',
+    imageObject?: { data: string, mimeType: string },
+    identity?: { name?: string, role?: string, gender?: string, age?: string }
 ): Promise<string | null> {
     if (!genAI) return null;
 
@@ -131,7 +133,15 @@ export async function generateAutoReply(
 - Guide them and try to convert them into a sale/lead if appropriate.`;
     }
 
-    const systemPrompt = `${customInstructions || "You are a professional WhatsApp business assistant."}
+    const identityContext = `YOUR IDENTITY:
+- Name: ${identity?.name || "Neural Assistant"}
+- Role: ${identity?.role || "Business Representative"}
+- Gender: ${identity?.gender || "Not specified"}
+- Age: ${identity?.age || "Advanced"}
+
+${customInstructions || "You are a professional WhatsApp business assistant."}`;
+
+    const systemPrompt = `${identityContext}
 
 BUSINESS KNOWLEDGE:
 ${businessInfo || "General professional knowledge"}
@@ -144,6 +154,7 @@ GENERAL CONVERSATIONAL RULES:
 2. CHATTY & NATURAL: Speak like a human. Use warm greetings.
 3. LANGUAGE: Always respond in the SAME language the user is using (Hindi, English, or Hinglish).
 4. REMEMBER CONTEXT: You have full memory of past conversation with this person. Use it! Never repeat questions already answered.
+5. IDENTITY: If someone asks who you are, what's your name, or your age, use the IDENTITY details provided above.
 
 FORMATTING RULES:
 1. Use *bold text* for keywords.
@@ -165,12 +176,27 @@ FORMATTING RULES:
         const chat = model.startChat({ history: geminiHistory });
 
         // Generate reply
-        const result = await chat.sendMessage(userMessage);
+        let result;
+        if (imageObject) {
+            result = await chat.sendMessage([
+                userMessage ? userMessage : "What is in this image?",
+                {
+                    inlineData: {
+                        data: imageObject.data,
+                        mimeType: imageObject.mimeType
+                    }
+                }
+            ]);
+        } else {
+            result = await chat.sendMessage(userMessage);
+        }
+
         const aiText = result.response.text() || "I'm sorry, I couldn't process that at the moment.";
 
         // Save both user msg + AI response to history (persistent)
+        // Note: For history, we only save the text part to save DB space and tokens
         history.push(
-            { role: 'user', text: userMessage, ts: Date.now() },
+            { role: 'user', text: userMessage ? userMessage : "[Image Attached]", ts: Date.now() },
             { role: 'model', text: aiText, ts: Date.now() }
         );
         await saveHistory(key, history);

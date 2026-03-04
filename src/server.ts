@@ -6,6 +6,7 @@ import { Whatsapp, FirebaseAdapter } from "./index";
 import { generateAutoReply, generateOutreach } from "./Services/AIHandler";
 import { generateAdminReply } from "./Services/AdminHandler";
 import { MessageQueue } from "./Services/MessageQueue";
+import { downloadMediaMessage } from "baileys";
 
 // Multer: store uploads in memory (no disk, no Firebase by default)
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -29,15 +30,89 @@ const pendingSessionTimeouts = new Map<string, NodeJS.Timeout>();
 // Guard: Sessions killed due to duplicate detection — prevent reconnect loop
 const killedSessions = new Set<string>();
 
+// ─── COST PROTECTION GUARDS ─────────────────────────────────────────────────
+// 1. Track ALL connected bot phone numbers to prevent bot-to-bot infinite loops
+// Key: phone number (cleaned), mapped to prevent Bot A ↔ Bot B auto-reply loop
+const connectedBotPhones = new Set<string>();
+
+// 2. Rate limiter: Max AI replies per contact per hour
+const AI_RATE_LIMIT = 20; // max 20 AI calls per contact per hour
+const aiRateMap = new Map<string, { count: number; resetAt: number }>();
+
+// 3. Subscription cache (5 mins) to save Firestore reads
+const subCache = new Map<string, { allowed: boolean; expiresAt: number }>();
+
+function checkAiRateLimit(key: string): boolean {
+  const now = Date.now();
+  const entry = aiRateMap.get(key);
+  if (!entry || now > entry.resetAt) {
+    aiRateMap.set(key, { count: 1, resetAt: now + 60 * 60 * 1000 });
+    return true; // allowed
+  }
+  if (entry.count >= AI_RATE_LIMIT) {
+    return false; // BLOCKED
+  }
+  entry.count++;
+  return true; // allowed
+}
+
+// Auto-clean rate map every 30 min
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of aiRateMap) {
+    if (now > entry.resetAt) aiRateMap.delete(key);
+  }
+}, 30 * 60 * 1000);
+
+// --- DAILY API QUOTA TRACKER ---
+const checkApiQuota = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const uid = (req as any).uid || (req.body.sessionId ? req.body.sessionId.split('_')[0] : null);
+  if (!uid) return res.status(400).json({ error: "UID required for quota check" });
+
+  const limits = (req as any).userPlan;
+  if (!limits) return next(); // Not a SaaS user or plan not loaded yet
+
+  const dailyQuota = limits.dailyApiQuota || 0;
+  if (dailyQuota === 0) return res.status(403).json({ error: "Your plan does not include API access. Please upgrade." });
+
+  try {
+    const db = getFirestore();
+    const today = new Date().toISOString().split('T')[0];
+    const usageRef = db.collection('users').doc(uid).collection('usage').doc(today);
+
+    await db.runTransaction(async (t) => {
+      const doc = await t.get(usageRef);
+      const currentCount = doc.exists ? doc.data()?.apiCount || 0 : 0;
+
+      if (currentCount >= dailyQuota) {
+        throw new Error("DAILY_QUOTA_EXCEEDED");
+      }
+
+      t.set(usageRef, { apiCount: currentCount + 1 }, { merge: true });
+    });
+
+    next();
+  } catch (error: any) {
+    if (error.message === 'DAILY_QUOTA_EXCEEDED') {
+      return res.status(429).json({
+        error: `Daily API Quota Exceeded (${dailyQuota}/day). Please add credits or upgrade for more capacity.`,
+        code: "QUOTA_EXCEEDED"
+      });
+    }
+    console.error("Quota Transaction Error:", error);
+    next(); // Fail open for safety, or return 500
+  }
+};
+
 // --- SaaS Subscription Logic ---
 import { getFirestore } from "firebase-admin/firestore";
 
 type PlanTier = 'personal' | 'starter' | 'pro' | 'custom';
-const PLAN_LIMITS: Record<PlanTier, { maxSessions: number, allowApi: boolean }> = {
-  personal: { maxSessions: 1, allowApi: false },
-  starter: { maxSessions: 2, allowApi: false },
-  pro: { maxSessions: 10, allowApi: true },
-  custom: { maxSessions: 100, allowApi: true }
+const PLAN_LIMITS: Record<PlanTier, { maxPA: number, maxBots: number, allowApi: boolean, allowCampaigns: boolean, dailyApiQuota: number }> = {
+  personal: { maxPA: 1, maxBots: 0, allowApi: false, allowCampaigns: false, dailyApiQuota: 0 },
+  starter: { maxPA: 2, maxBots: 3, allowApi: false, allowCampaigns: true, dailyApiQuota: 25 },
+  pro: { maxPA: 10, maxBots: 15, allowApi: true, allowCampaigns: true, dailyApiQuota: 25 },
+  custom: { maxPA: 100, maxBots: 100, allowApi: true, allowCampaigns: true, dailyApiQuota: 9999 }
 };
 
 const checkSubscription = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -51,13 +126,15 @@ const checkSubscription = async (req: express.Request, res: express.Response, ne
 
   if (!uid) return res.status(400).json({ error: "Missing UID/SessionID identification" });
 
-  // Agency profiles bypass subscription checks for now
-  if (uid.startsWith('agency_')) {
-    return next();
-  }
-
   try {
     const db = getFirestore();
+
+    // 1. Agency Client Check
+    if (uid.startsWith('agency_')) {
+      return next(); // Agency bots tracked manually by the owner
+    }
+
+    // 2. Regular User SaaS Check
     const userDoc = await db.collection('users').doc(uid).get();
 
     if (!userDoc.exists) {
@@ -71,6 +148,7 @@ const checkSubscription = async (req: express.Request, res: express.Response, ne
 
     // Agency owners and platform admins bypass subscription checks (global)
     if (data?.role === 'agency' || data?.role === 'admin' || data?.owner === true) {
+      (req as any).userPlan = PLAN_LIMITS['custom']; // Grant full access
       return next();
     }
 
@@ -85,20 +163,42 @@ const checkSubscription = async (req: express.Request, res: express.Response, ne
       return res.status(402).json({ error: "Subscription expired", code: "SUBSCRIPTION_EXPIRED" });
     }
 
+    const plan: PlanTier = sub.plan || 'personal';
+    const limits = PLAN_LIMITS[plan];
+    (req as any).userPlan = limits; // Inject plan limits into request for downstream routes
+
     // Check session limits (only for start session endpoints)
     if (req.path.includes('/session/start')) {
-      const plan: PlanTier = sub.plan || 'personal';
-      const limits = PLAN_LIMITS[plan];
+      const { botType } = req.body; // 'personal_assistant' or 'business_bot' (default)
+      const isPA = botType === 'personal_assistant';
 
       const sessionIds = await whatsapp.getSessionsIds();
-      // Only count sessions belonging to THIS user (sessions start with uid@)
-      const userSessions = sessionIds.filter(id => id.startsWith(`${uid}@`));
+      const userSessions = sessionIds.filter(id => id.startsWith(`${uid}_`));
 
-      if (userSessions.length >= limits.maxSessions) {
-        return res.status(402).json({
-          error: `Plan limit reached. Your ${plan} plan allows max ${limits.maxSessions} sessions.`,
-          code: "LIMIT_REACHED"
-        });
+      // Count existing types by reading store (this is a bit heavy, but accurate)
+      let currentPaCount = 0;
+      let currentBotCount = 0;
+
+      for (const sid of userSessions) {
+        const storedType = await (whatsapp as any).adapter.readData(sid, 'botType', 'config');
+        if (storedType === 'personal_assistant') currentPaCount++;
+        else currentBotCount++;
+      }
+
+      if (isPA) {
+        if (currentPaCount >= limits.maxPA) {
+          return res.status(402).json({
+            error: `Personal Assistant limit reached. Your ${plan} plan allows max ${limits.maxPA} assistant(s).`,
+            code: "LIMIT_REACHED"
+          });
+        }
+      } else {
+        if (currentBotCount >= limits.maxBots) {
+          return res.status(402).json({
+            error: `Business Bot limit reached. Your ${plan} plan allows max ${limits.maxBots} bot(s).`,
+            code: "LIMIT_REACHED"
+          });
+        }
       }
     }
 
@@ -174,6 +274,7 @@ const whatsapp = new Whatsapp({
         }
         // Register this phone with this session as its rightful owner
         phoneToSessionGuard.set(phoneNumber, sessionId);
+        connectedBotPhones.add(phoneNumber); // Track for bot-to-bot loop protection
         console.log(`📱 Phone ${phoneNumber} registered to session '${sessionId}'`);
       }
     } catch (err) {
@@ -197,6 +298,7 @@ const whatsapp = new Whatsapp({
     for (const [phone, sid] of phoneToSessionGuard.entries()) {
       if (sid === sessionId) {
         phoneToSessionGuard.delete(phone);
+        connectedBotPhones.delete(phone); // Remove from bot-to-bot guard
         console.log(`🗑️ Phone guard cleared for session '${sessionId}'`);
         break;
       }
@@ -207,47 +309,118 @@ const whatsapp = new Whatsapp({
     // 1. Log incoming message
     const remoteJid = msg.key.remoteJid;
     const isFromMe = msg.key.fromMe;
-    const text = msg.message?.conversation || msg.message?.extendedTextMessage?.text;
 
-    console.log(`[${msg.sessionId}] New Message from ${remoteJid}: ${text || "Media/Other"}`);
+    // Extract text and image
+    let text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
+    let imageObject: { data: string, mimeType: string } | undefined = undefined;
 
-    // --- SUBSCRIPTION CHECK FOR AI REPLIES ---
+    const imageMessage = msg.message?.imageMessage;
+    if (imageMessage) {
+      text = imageMessage.caption || text; // Use caption if available
+      try {
+        console.log(`[${msg.sessionId}] Downloading image from ${remoteJid}...`);
+        const buffer = await downloadMediaMessage(
+          msg,
+          'buffer',
+          {},
+          { logger: undefined, reuploadRequest: undefined }
+        );
+        imageObject = {
+          data: buffer.toString('base64'),
+          mimeType: imageMessage.mimetype || 'image/jpeg'
+        };
+        console.log(`[${msg.sessionId}] Automatically extracted base64 image (MIME: ${imageObject.mimeType})`);
+      } catch (err) {
+        console.error(`[${msg.sessionId}] Failed to download image message:`, err);
+      }
+    }
+
+    console.log(`[${msg.sessionId}] New Message from ${remoteJid}: ${text ? text : (imageObject ? "[Image attached]" : "Media/Other")}`);
+
+    // --- SUBSCRIPTION CHECK FOR AI REPLIES (with 5-min cache) ---
     try {
-      // SCALABILITY FIX: Read exact owner UID from database instead of guessing from sessionId string
       const storedUid = await (whatsapp as any).adapter.readData(msg.sessionId, 'ownerUid');
       const uidFromSession = storedUid || msg.sessionId.split('_')[0];
 
-      // 1. Check if it's an agency-managed bot
-      if (uidFromSession.startsWith('agency') || uidFromSession === 'agent') {
-        // Bypass for agency bots
+      // Check cache first
+      const cached = subCache.get(uidFromSession);
+      const now = Date.now();
+
+      if (cached && now < cached.expiresAt) {
+        if (!cached.allowed) {
+          console.warn(`⚠️ [${msg.sessionId}] AI Reply blocked (cached): Subscription/Agency Access expired.`);
+          return;
+        }
       } else {
-        // 2. Check user role and subscription for regular SaaS bots
-        const userDoc = await getFirestore().collection('users').doc(uidFromSession).get();
-        const userData = userDoc.data();
+        let allowed = true;
 
-        if (userData?.role !== 'agency' && userData?.role !== 'admin' && userData?.owner !== true) {
-          const sub = userData?.subscription;
-          const isExpired = sub?.expiresAt ? (new Date() > sub.expiresAt.toDate()) : false;
+        // 1. Check if it's an agency-managed bot
+        if (uidFromSession.startsWith('agency_') || uidFromSession === 'agent') {
+          // bypass for agency/test bots
+          allowed = true;
+        } else {
+          // 2. Check user role and subscription for regular SaaS bots
+          const userDoc = await getFirestore().collection('users').doc(uidFromSession).get();
+          const userData = userDoc.data();
 
-          if (!sub || sub.status !== 'active' || isExpired) {
-            console.warn(`⚠️ [${msg.sessionId}] AI Reply blocked: Subscription missing or expired.`);
-            return;
+          if (userData?.role !== 'agency' && userData?.role !== 'admin' && userData?.owner !== true) {
+            const sub = userData?.subscription;
+            const isExpired = sub?.expiresAt ? (new Date() > sub.expiresAt.toDate()) : false;
+            if (!sub || sub.status !== 'active' || isExpired) {
+              allowed = false;
+            }
           }
+        }
+
+        // Cache for 5 minutes
+        subCache.set(uidFromSession, { allowed, expiresAt: now + 5 * 60 * 1000 });
+        if (!allowed) {
+          console.warn(`⚠️ [${msg.sessionId}] AI Reply blocked: Subscription or Agency Access missing/expired.`);
+          return;
         }
       }
     } catch (subErr) {
       console.error("AI Sub check failed:", subErr);
     }
 
-    // 2. Ignore messages sent by us (to prevent infinite loops) or messages without text
-    if (isFromMe || !text || !remoteJid) return;
+    // 2. Ignore messages sent by us (to prevent infinite loops) or messages without text/image
+    if (isFromMe || (!text && !imageObject) || !remoteJid) return;
 
     // 3. Skip status broadcast and groups for now
     if (remoteJid === 'status@broadcast' || remoteJid.includes('@g.us')) return;
 
+    // --- BOT-TO-BOT LOOP PROTECTION ---
+    const senderPhone = remoteJid.split('@')[0];
+    if (connectedBotPhones.has(senderPhone)) {
+      console.warn(`🛑 [${msg.sessionId}] BLOCKED bot-to-bot message from ${senderPhone}`);
+      return;
+    }
+
+    // --- PERSONAL ASSISTANT LOGIC ---
+    // If it's a personal assistant, ONLY reply to the owner
+    const [botType, ownerNumber] = await Promise.all([
+      (whatsapp as any).adapter.readData(msg.sessionId, 'botType'),
+      (whatsapp as any).adapter.readData(msg.sessionId, 'ownerNumber')
+    ]);
+
+    if (botType === 'personal_assistant') {
+      const cleanOwner = ownerNumber?.replace(/[^\d]/g, "");
+      const cleanSender = senderPhone;
+
+      if (cleanOwner !== cleanSender) {
+        // Silently ignore messages from others for Personal Assistants
+        return;
+      }
+    }
+
+    // --- RATE LIMIT CHECK ---
+    const rateLimitKey = `${msg.sessionId}::${senderPhone}`;
+    if (!checkAiRateLimit(rateLimitKey)) {
+      console.warn(`⚠️ [${msg.sessionId}] RATE LIMITED: ${senderPhone}`);
+      return;
+    }
+
     // --- OWNER COMMANDS LOGIC ---
-    // Fetch owner number for THIS session from database
-    const ownerNumber = await (whatsapp as any).adapter.readData(msg.sessionId, 'ownerNumber');
     const cleanJid = remoteJid.split('@')[0];
 
     if (ownerNumber && cleanJid === ownerNumber && text.startsWith('!campaign')) {
@@ -303,13 +476,26 @@ const whatsapp = new Whatsapp({
     // 5. Generate AI Reply
     const isOwner = ownerNumber && cleanJid === ownerNumber;
 
-    // Fetch custom instructions and business info for THIS session
-    const [instructions, businessInfo] = await Promise.all([
+    // Fetch custom instructions, business info and identity for THIS session
+    const [instructions, businessInfo, name, role, gender, age] = await Promise.all([
       (whatsapp as any).adapter.readData(msg.sessionId, 'instructions'),
-      (whatsapp as any).adapter.readData(msg.sessionId, 'businessInfo')
+      (whatsapp as any).adapter.readData(msg.sessionId, 'businessInfo'),
+      (whatsapp as any).adapter.readData(msg.sessionId, 'name'),
+      (whatsapp as any).adapter.readData(msg.sessionId, 'role'),
+      (whatsapp as any).adapter.readData(msg.sessionId, 'gender'),
+      (whatsapp as any).adapter.readData(msg.sessionId, 'age')
     ]);
 
-    const aiResponse = await generateAutoReply(text, !!isOwner, instructions, businessInfo, msg.sessionId, remoteJid);
+    const aiResponse = await generateAutoReply(
+      text,
+      !!isOwner,
+      instructions,
+      businessInfo,
+      msg.sessionId,
+      remoteJid,
+      imageObject,
+      { name, role, gender, age }
+    );
 
     // 6. Send reply if AI responded
     if (aiResponse) {
@@ -361,8 +547,8 @@ queue.startWorker().catch(err => console.error("Queue Start Error:", err));
  * POST http://localhost:3000/session/start
  * Body: { "sessionId": "my-user-1" }
  */
-app.post("/session/start", checkSubscription, async (req, res) => {
-  const { sessionId, uid, ownerNumber, instructions, businessInfo } = req.body;
+app.post("/session/start", checkSubscription, async (req: any, res) => {
+  const { sessionId, uid, ownerNumber, instructions, businessInfo, name, role, gender, age, botType } = req.body;
   if (!sessionId) return res.status(400).json({ error: "sessionId is required" });
   // UID ownership check: if uid provided, sessionId MUST start with uid_
   // Special handling for Agency Portal to support legacy "agent_" IDs created during initial dev
@@ -417,6 +603,13 @@ app.post("/session/start", checkSubscription, async (req, res) => {
     if (instructions) await (whatsapp as any).adapter.writeData(sessionId, 'instructions', 'config', instructions);
     if (businessInfo) await (whatsapp as any).adapter.writeData(sessionId, 'businessInfo', 'config', businessInfo);
     if (uid) await (whatsapp as any).adapter.writeData(sessionId, 'ownerUid', 'config', uid);
+    if (ownerNumber) await (whatsapp as any).adapter.writeData(sessionId, 'ownerNumber', 'config', ownerNumber);
+    if (botType) await (whatsapp as any).adapter.writeData(sessionId, 'botType', 'config', botType);
+    if (name) await (whatsapp as any).adapter.writeData(sessionId, 'name', 'config', name);
+    if (role) await (whatsapp as any).adapter.writeData(sessionId, 'role', 'config', role);
+    if (gender) await (whatsapp as any).adapter.writeData(sessionId, 'gender', 'config', gender);
+    if (age) await (whatsapp as any).adapter.writeData(sessionId, 'age', 'config', age);
+
     res.json({
       message: `Session ${sessionId} started.`,
       instruction: "Please scan the QR code displayed on the page."
@@ -568,11 +761,16 @@ app.get("/session/status/:sessionId", (req, res) => {
  * POST http://localhost:3000/message/send
  * Body: { "sessionId": "my-user-1", "to": "91XXXXXXXXXX", "text": "Hello from API!" }
  */
-app.post("/message/send", checkSubscription, async (req, res) => {
+app.post("/message/send", checkSubscription, checkApiQuota, async (req, res) => {
   const { sessionId, to, text } = req.body;
 
   if (!sessionId || !to || !text) {
     return res.status(400).json({ error: "sessionId, to, and text are required" });
+  }
+
+  const limits = (req as any).userPlan;
+  if (limits && !limits.allowApi) {
+    return res.status(403).json({ error: "Developer API access requires the Pro plan. Please upgrade to use this endpoint." });
   }
 
   try {
@@ -591,11 +789,16 @@ app.post("/message/send", checkSubscription, async (req, res) => {
  * POST http://localhost:3000/campaign/start
  * Body: { "sessionId": "my-user-1", "numbers": ["91XXXXXXXXXX"], "businessContext": "Brief info about service" }
  */
-app.post("/campaign/start", async (req, res) => {
+app.post("/campaign/start", checkSubscription, checkApiQuota, async (req, res) => {
   const { sessionId, numbers, businessContext } = req.body;
 
   if (!sessionId || !numbers || !Array.isArray(numbers) || !businessContext) {
     return res.status(400).json({ error: "sessionId, numbers (array), and businessContext are required" });
+  }
+
+  const limits = (req as any).userPlan;
+  if (limits && !limits.allowCampaigns) {
+    return res.status(403).json({ error: "Marketing Campaigns require the Starter plan or higher. Please upgrade to use this feature." });
   }
 
   try {

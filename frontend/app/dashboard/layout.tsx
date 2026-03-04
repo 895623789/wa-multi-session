@@ -1,5 +1,5 @@
 "use client";
-import React from "react";
+import React, { useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import DashboardSidebar from "@/components/DashboardSidebar";
@@ -62,17 +62,21 @@ export default function DashboardLayout({
     const pathname = usePathname();
 
     // Auth guard
-    if (!loading && !user) {
-        router.replace("/login");
-        return null;
-    }
-    if (!loading && userData && !userData.onboardingComplete) {
-        router.replace("/onboarding");
-        return null;
-    }
+    useEffect(() => {
+        if (!loading) {
+            if (!user) {
+                router.replace("/login");
+            } else if (userData && !userData.onboardingComplete) {
+                router.replace("/onboarding");
+            }
+        }
+    }, [user, userData, loading, router]);
+
+    if (loading) return null;
+    if (!user || (userData && !userData.onboardingComplete)) return null;
 
     // Block guard — real-time via Firestore onSnapshot in AuthProvider
-    if (!loading && userData?.blocked === true) {
+    if (userData?.blocked === true) {
         return <BlockedScreen />;
     }
 

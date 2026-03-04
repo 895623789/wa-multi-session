@@ -19,7 +19,7 @@ interface AgencyClient {
     purpose: string;
     monthlyFee: number;
     startDate: any;
-    billingCycleStart?: any; // To track manual 30-day cycles
+    expiresAt?: any; // To track manual access cycles
     status: 'active' | 'pending' | 'expired';
     notes: string;
 }
@@ -31,6 +31,7 @@ export default function AgencyPortal() {
     const [isAddModalOpen, setIsAddModalOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean, client: AgencyClient | null, lang: 'en' | 'hi' }>({ isOpen: false, client: null, lang: 'en' });
+    const [extendModal, setExtendModal] = useState<{ isOpen: boolean, client: AgencyClient | null, daysToAdd: number }>({ isOpen: false, client: null, daysToAdd: 30 });
 
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editClientId, setEditClientId] = useState<string | null>(null);
@@ -64,10 +65,14 @@ export default function AgencyPortal() {
     const handleAddClient = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
+            const expiryDate = new Date();
+            expiryDate.setDate(expiryDate.getDate() + 3); // 3 days default trial for agency clients
+
             await addDoc(collection(db, "agencyClients"), {
                 ...formData,
                 status: 'active',
                 startDate: serverTimestamp(),
+                expiresAt: expiryDate,
                 createdAt: serverTimestamp()
             });
             setIsAddModalOpen(false);
@@ -104,6 +109,30 @@ export default function AgencyPortal() {
             setFormData({ name: "", businessName: "", location: "", purpose: "", monthlyFee: 1500, notes: "" });
         } catch (error) {
             console.error("Error updating client:", error);
+        }
+    };
+
+    const handleExtendAccess = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!extendModal.client) return;
+        try {
+            const client = extendModal.client;
+            let currentExpiry = client.expiresAt?.toDate ? client.expiresAt.toDate() : (client.expiresAt?.seconds ? new Date(client.expiresAt.seconds * 1000) : new Date());
+
+            // If already expired, start from today. If active, add to current expiry.
+            if (currentExpiry < new Date()) {
+                currentExpiry = new Date();
+            }
+
+            currentExpiry.setDate(currentExpiry.getDate() + extendModal.daysToAdd);
+
+            await updateDoc(doc(db, "agencyClients", client.id), {
+                expiresAt: currentExpiry,
+                updatedAt: serverTimestamp()
+            });
+            setExtendModal({ isOpen: false, client: null, daysToAdd: 30 });
+        } catch (error) {
+            console.error("Error extending access:", error);
         }
     };
 
@@ -169,6 +198,7 @@ export default function AgencyPortal() {
                             client={client}
                             onDeleteClick={(c) => setDeleteModal({ isOpen: true, client: c, lang: 'hi' })}
                             onEditClick={(c) => handleEditClick(c)}
+                            onExtendClick={(c) => setExtendModal({ isOpen: true, client: c, daysToAdd: 30 })}
                         />
                     ))
                 ) : (
@@ -231,6 +261,66 @@ export default function AgencyPortal() {
                                     {deleteModal.lang === 'hi' ? "नहीं, वापस जाएं" : "Cancel"}
                                 </button>
                             </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* Extend Access Modal */}
+            <AnimatePresence>
+                {extendModal.isOpen && (
+                    <div className="fixed inset-0 z-[600] flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+                            onClick={() => setExtendModal({ ...extendModal, isOpen: false })}
+                        />
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 30 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 30 }}
+                            className="relative w-full max-w-md bg-white rounded-[3rem] p-10 shadow-2xl overflow-hidden"
+                        >
+                            <div className="absolute top-0 left-0 w-full h-2 bg-emerald-500" />
+                            <div className="flex justify-between items-start mb-6">
+                                <div className="w-16 h-16 bg-emerald-50 rounded-[1.5rem] flex items-center justify-center text-emerald-500 shadow-inner">
+                                    <Calendar className="w-9 h-9" />
+                                </div>
+                                <button
+                                    onClick={() => setExtendModal({ ...extendModal, isOpen: false })}
+                                    className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-900 transition-all active:scale-95"
+                                >
+                                    <X size={20} strokeWidth={3} />
+                                </button>
+                            </div>
+
+                            <h3 className="text-2xl font-black text-slate-900 mb-2 font-outfit leading-tight">Extend Client Access</h3>
+                            <p className="text-slate-500 text-sm font-bold leading-relaxed mb-6">
+                                Add active days for <strong>{extendModal.client?.businessName}</strong>.
+                                Their bot will automatically stop when these days expire.
+                            </p>
+
+                            <form onSubmit={handleExtendAccess} className="space-y-4">
+                                <div className="space-y-2">
+                                    <label className="text-xs font-black uppercase text-slate-500 ml-1">Days to Add</label>
+                                    <select
+                                        value={extendModal.daysToAdd}
+                                        onChange={(e) => setExtendModal({ ...extendModal, daysToAdd: parseInt(e.target.value) })}
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all text-slate-900"
+                                    >
+                                        <option value={7}>+7 Days (Trial Extension)</option>
+                                        <option value={15}>+15 Days (Half Month)</option>
+                                        <option value={30}>+30 Days (One Month)</option>
+                                        <option value={90}>+90 Days (Quarterly)</option>
+                                        <option value={365}>+365 Days (Annual)</option>
+                                    </select>
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    className="w-full mt-4 py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-[1.25rem] font-black shadow-xl shadow-emerald-500/20 transition-all hover:-translate-y-1 active:scale-95 text-sm"
+                                >
+                                    Confirm Extension
+                                </button>
+                            </form>
                         </motion.div>
                     </div>
                 )}
@@ -356,7 +446,7 @@ export default function AgencyPortal() {
     );
 }
 
-function ClientCard({ client, onDeleteClick, onEditClick }: { client: AgencyClient, onDeleteClick: (client: AgencyClient) => void, onEditClick: (client: AgencyClient) => void }) {
+function ClientCard({ client, onDeleteClick, onEditClick, onExtendClick }: { client: AgencyClient, onDeleteClick: (client: AgencyClient) => void, onEditClick: (client: AgencyClient) => void, onExtendClick: (client: AgencyClient) => void }) {
     const [botCount, setBotCount] = useState<number | null>(null);
 
     useEffect(() => {
@@ -417,22 +507,26 @@ function ClientCard({ client, onDeleteClick, onEditClick }: { client: AgencyClie
                 </div>
                 {/* Dynamically Computed Status Block */}
                 {(() => {
-                    const cycleStart = client.billingCycleStart || client.startDate;
+                    const expiresAt = client.expiresAt;
                     let daysLeftStr = 'N/A';
                     let isWarning = false;
                     let isOverdue = false;
-                    if (cycleStart) {
-                        const startMs = cycleStart.toMillis ? cycleStart.toMillis() : (cycleStart.seconds * 1000);
-                        const endMs = startMs + (30 * 24 * 60 * 60 * 1000);
+
+                    if (expiresAt) {
+                        const endMs = expiresAt.toMillis ? expiresAt.toMillis() : (expiresAt.seconds * 1000);
                         const remaining = endMs - Date.now();
                         const days = Math.ceil(remaining / (1000 * 60 * 60 * 24));
                         daysLeftStr = days < 0 ? `${Math.abs(days)}d Overdue` : `${days}d Left`;
                         isOverdue = days < 0;
-                        isWarning = days <= 3 && !isOverdue;
+                        isWarning = days >= 0 && days <= 3;
+                    } else {
+                        isOverdue = true;
+                        daysLeftStr = 'Expired';
                     }
+
                     return (
                         <div className="flex flex-col">
-                            <span className="text-[9px] font-black uppercase text-slate-400 tracking-tighter mb-1">Billing</span>
+                            <span className="text-[9px] font-black uppercase text-slate-400 tracking-tighter mb-1">Access Tracking</span>
                             <div className="flex items-center gap-1.5">
                                 <span className={`w-2 h-2 rounded-full ${isOverdue ? 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.5)]' : isWarning ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]' : 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]'} ${isOverdue || isWarning ? 'animate-pulse' : ''}`} />
                                 <span className={`${isOverdue ? 'text-rose-600' : isWarning ? 'text-amber-600' : 'text-emerald-500'} text-xs font-black uppercase tracking-tight`}>
@@ -445,7 +539,14 @@ function ClientCard({ client, onDeleteClick, onEditClick }: { client: AgencyClie
             </div>
 
             {/* Actions Block */}
-            <div className="flex items-center gap-3 w-full md:w-auto justify-end shrink-0">
+            <div className="flex items-center gap-2 w-full md:w-auto justify-end shrink-0">
+                <button
+                    onClick={() => onExtendClick(client)}
+                    className="p-3 rounded-2xl bg-slate-50 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition-all active:scale-90"
+                    title="Extend Access"
+                >
+                    <Calendar className="w-5 h-5" />
+                </button>
                 <button
                     onClick={() => onEditClick(client)}
                     className="p-3 rounded-2xl bg-slate-50 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-all active:scale-90"
@@ -462,7 +563,7 @@ function ClientCard({ client, onDeleteClick, onEditClick }: { client: AgencyClie
                 </button>
                 <Link
                     href={`/owner/agency/${client.id}`}
-                    className="px-5 py-3 h-[44px] bg-slate-900 text-white hover:bg-indigo-600 rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-xl shadow-slate-900/10 active:scale-95 whitespace-nowrap"
+                    className="px-5 py-3 ml-2 h-[44px] bg-slate-900 text-white hover:bg-indigo-600 rounded-2xl text-[11px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-xl shadow-slate-900/10 active:scale-95 whitespace-nowrap"
                 >
                     <Bot size={16} />
                     Manage Bots

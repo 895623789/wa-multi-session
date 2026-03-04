@@ -20,17 +20,24 @@ interface AgentConfig {
     name: string;
     role: string;
     gender: string;
-    age: number;
-    businessInfo: string;
-    instructions: string;
-    ownerNumbers: string[];
-    replyDelay: number;
-    autoGreet: boolean;
+    age?: number;
+    businessInfo?: string;
+    instructions?: string;
+    ownerNumbers?: string[];
+    replyDelay?: number;
+    autoGreet?: boolean;
     isActive: boolean; // For pause/resume
     updatedAt: number;
+    botType?: 'personal_assistant' | 'business_bot';
 }
 
-const DEFAULT_INSTRUCTIONS = `You are a professional real estate agent named [Your Name]. Your goal is to guide clients through buying, selling, or renting properties. Be polite, concise, and helpful. Always ask for their budget and preferred location if they haven't provided it. If a user asks a question outside of real estate, politely redirect the conversation back to properties or our specific offers.`;
+const COUNTRIES = [
+    { code: "IN", name: "India", flag: "🇮🇳", dial: "+91" },
+    { code: "US", name: "USA", flag: "🇺🇸", dial: "+1" },
+    { code: "PK", name: "Pakistan", flag: "🇵🇰", dial: "+92" },
+];
+
+const DEFAULT_INSTRUCTIONS = "You are a professional WhatsApp business assistant...";
 
 // ─── Shared Components ──────────────────────────────────────────────────────
 const ImageFallback = ({ type, role }: { type: string, role: string }) => {
@@ -56,7 +63,7 @@ export default function UnifiedAgentsPage() {
     const [searchTerm, setSearchTerm] = useState("");
 
     // Current App State
-    const [viewState, setViewState] = useState<'list' | 'wizard' | 'qr'>('list');
+    const [viewState, setViewState] = useState<'list' | 'type_selection' | 'wizard' | 'qr'>('list');
 
     // Wizard State
     const [wizardStep, setWizardStep] = useState(1);
@@ -71,6 +78,7 @@ export default function UnifiedAgentsPage() {
         replyDelay: 2,
         autoGreet: true,
         isActive: true,
+        botType: 'business_bot',
     });
 
     // Connection & QR State
@@ -102,6 +110,8 @@ export default function UnifiedAgentsPage() {
         lang: 'en'
     });
 
+    const [upgradeModal, setUpgradeModal] = useState(false);
+
     // Toasts
     const [toastMsg, setToastMsg] = useState<{ title: string, msg: string, type: 'success' | 'error' } | null>(null);
 
@@ -115,13 +125,13 @@ export default function UnifiedAgentsPage() {
         if (!uid) return;
         try {
             const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
-            const res = await fetch(`${baseUrl}/session/list?uid=${uid}`);
-            if (res.ok) {
+            const res = await fetch(`${baseUrl}/session/list?uid=${uid}`).catch(() => null);
+            if (res && res.ok) {
                 const data = await res.json();
                 setConnectedSessions(data.sessions || []);
             }
         } catch (e) {
-            console.error("Fetch Sessions Error:", e);
+            // Silently fail to avoid Next.js dev overlay freezing the screen when backend is restarting
         }
     }, [uid]);
 
@@ -202,16 +212,18 @@ export default function UnifiedAgentsPage() {
     };
 
     // ─── Connection Logic ─────────────────────────────────────────────────────
-    const handleGenerateQR = async () => {
+    const handleGenerateQR = async (overrideSessionId?: string, overrideChanging?: boolean) => {
         if (!uid) return;
         setConnectionStatus("Initiating Secure Pipeline...");
         setQrCode("");
         setIsPolling(false);
         setViewState('qr');
 
-        // If not changing number, generate new ID
-        let sessionIdToUse = activeFullSessionId;
-        if (!isChangingNumber) {
+        // Generate a fresh session ID if we don't have one (start of recruitment)
+        let sessionIdToUse = overrideSessionId || activeFullSessionId;
+        // Use the overrideChanging param if provided, otherwise fall back to state
+        const changingNumber = overrideChanging ?? isChangingNumber;
+        if (!sessionIdToUse || (!changingNumber && sessionIdToUse.startsWith('draft-'))) {
             const shortId = `agent-${Date.now().toString().slice(-6)}`;
             sessionIdToUse = `${uid}_${shortId}`;
             setActiveFullSessionId(sessionIdToUse);
@@ -219,19 +231,45 @@ export default function UnifiedAgentsPage() {
 
         try {
             const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
-            if (isChangingNumber) {
-                await fetch(`${baseUrl}/session/delete/${sessionIdToUse}?uid=${uid}`, { method: "DELETE" });
+
+            // 1. If changing number, delete old backend session first
+            if (changingNumber) {
+                if (!sessionIdToUse.startsWith('draft-')) {
+                    await fetch(`${baseUrl}/session/delete/${sessionIdToUse}?uid=${uid}`, { method: "DELETE" });
+                }
+                const shortId = `agent-${Date.now().toString().slice(-6)}`;
+                sessionIdToUse = `${uid}_${shortId}`;
+                setActiveFullSessionId(sessionIdToUse);
             }
 
+            // 2. CRITICAL: Save full agent data to Firestore with the SAME ID first
+            const agentProfile: AgentConfig = {
+                ...draftAgent,
+                id: sessionIdToUse,
+                name: draftAgent.name || 'Bot',
+                role: draftAgent.role || 'Assistant',
+                gender: draftAgent.gender || 'neutral',
+                age: draftAgent.age || 25,
+                isActive: true,
+                updatedAt: Date.now()
+            };
+            await saveAgentToFirestore(agentProfile);
+
+            // 3. Start backend session with full identity
             const res = await fetch(`${baseUrl}/session/start`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     sessionId: sessionIdToUse,
                     uid,
+                    name: draftAgent.name,
+                    role: draftAgent.role,
+                    gender: draftAgent.gender,
+                    age: draftAgent.age,
                     instructions: draftAgent.instructions,
                     businessInfo: draftAgent.businessInfo,
-                    ownerNumber: draftAgent.ownerNumbers?.[0]
+                    ownerNumber: draftAgent.ownerNumbers?.[0],
+                    botType: draftAgent.botType
                 })
             });
             const data = await res.json();
@@ -266,7 +304,8 @@ export default function UnifiedAgentsPage() {
                 replyDelay: draftAgent.replyDelay || 0,
                 autoGreet: draftAgent.autoGreet ?? true,
                 isActive: true,
-                updatedAt: Date.now()
+                updatedAt: Date.now(),
+                botType: draftAgent.botType || 'business_bot'
             };
             saveAgentToFirestore(newAgent);
             showToast("Hired Successfully!", `${newAgent.name} is now active in your pipeline.`, "success");
@@ -318,6 +357,7 @@ export default function UnifiedAgentsPage() {
             replyDelay: 2,
             autoGreet: true,
             isActive: true,
+            botType: 'business_bot'
         });
         setEditingAgentId(null);
     };
@@ -371,23 +411,25 @@ export default function UnifiedAgentsPage() {
                         <div className="flex flex-col items-end gap-2">
                             <button
                                 onClick={() => {
-                                    if (isExpired) return showToast("Renew Required", "Your plan has expired. Please renew to hire more agents.", "error");
-                                    if (connectedSessions.length >= (subscription?.maxSessions || 1)) {
-                                        return showToast("Limit Reached", `Your ${subscription?.plan} plan allows max ${subscription?.maxSessions} active agents.`, "error");
+                                    if (isExpired) return setUpgradeModal(true);
+
+                                    // Subscription limits check (simplified for now but backend enforces strict counts)
+                                    if (connectedSessions.length >= (subscription?.maxSessions || 100)) {
+                                        return showToast("Limit Reached", `Your plan has reached its bot capacity.`, "error");
                                     }
+
                                     resetWizard();
-                                    setViewState('wizard');
+                                    setViewState('type_selection');
                                 }}
-                                disabled={isExpired || connectedSessions.length >= (subscription?.maxSessions || 1)}
-                                className={`px-8 py-3.5 rounded-2xl font-black flex items-center gap-2 transition-all shadow-xl hover:-translate-y-1 active:scale-95 ${(isExpired || connectedSessions.length >= (subscription?.maxSessions || 1))
+                                className={`px-8 py-3.5 rounded-2xl font-black flex items-center gap-2 transition-all shadow-xl hover:-translate-y-1 active:scale-95 ${isExpired
                                     ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
                                     : 'bg-primary text-white shadow-primary/25 hover:bg-indigo-600'
                                     }`}
                             >
                                 <Plus className="w-5 h-5" /> Hire New Agent
                             </button>
-                            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
-                                Capacity: <span className="text-slate-900 dark:text-white">{connectedSessions.length} / {subscription?.maxSessions || 1}</span> Agents
+                            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">
+                                Plan: <span className="text-primary">{subscription?.plan}</span>
                             </p>
                         </div>
                     </div>
@@ -512,10 +554,10 @@ export default function UnifiedAgentsPage() {
                                             if (connectedSessions.includes(agent.id)) {
                                                 setReconnectGuard({ isOpen: true, agent });
                                             } else {
+                                                setDraftAgent(agent);
                                                 setActiveFullSessionId(agent.id);
                                                 setIsChangingNumber(true);
-                                                setDraftAgent(agent);
-                                                handleGenerateQR();
+                                                handleGenerateQR(agent.id, true);
                                             }
                                         }}
                                         className="p-3 rounded-2xl bg-slate-50 dark:bg-slate-700 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-600/20 transition-all active:scale-90"
@@ -538,176 +580,355 @@ export default function UnifiedAgentsPage() {
             )}
 
             {/* ─── MANDATORY STEPPER (STRICT 3-STEP PROCESS) ─── */}
-            {viewState === 'wizard' && (
+            {(viewState === 'wizard' || viewState === 'type_selection') && (
                 <div className="w-full max-w-4xl bg-white dark:bg-slate-800 rounded-[3rem] shadow-soft overflow-hidden border border-slate-100 dark:border-slate-700 flex flex-col min-h-[650px] animate-in zoom-in-95 duration-500">
-                    {/* Stepper Header */}
-                    <div className="px-10 py-8 bg-slate-50/50 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700">
-                        <div className="flex justify-between items-center mb-10">
-                            <button onClick={resetWizard} className="flex items-center gap-2 text-slate-400 hover:text-slate-900 dark:hover:text-white font-black uppercase text-[10px] tracking-widest transition-colors">
-                                <ChevronLeft className="w-4 h-4" /> Cancel Process
-                            </button>
-                            <div className="flex items-center gap-2">
-                                <Sparkles className="w-4 h-4 text-primary" />
-                                <span className="text-[10px] font-black uppercase text-slate-800 dark:text-white tracking-widest px-4 py-1.5 bg-white dark:bg-slate-800 rounded-full border border-slate-100 dark:border-slate-700">
-                                    Step {wizardStep} of 3
-                                </span>
-                            </div>
-                        </div>
 
-                        <div className="flex items-center gap-6 relative px-2">
-                            <div className="absolute top-1/2 left-0 w-full h-1 bg-slate-100 dark:bg-slate-800 -translate-y-1/2 -z-0 rounded-full" />
-                            <div
-                                className="absolute top-1/2 left-0 h-1 bg-primary -translate-y-1/2 -z-0 rounded-full transition-all duration-700"
-                                style={{ width: `${((wizardStep - 1) / 2) * 100}%` }}
-                            />
-
-                            {[1, 2, 3].map(step => (
-                                <div key={step} className="relative z-10 flex-1 flex flex-col items-center gap-3">
-                                    <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black transition-all duration-500 shadow-sm ${wizardStep >= step ? 'bg-primary text-white scale-110' : 'bg-white dark:bg-slate-800 text-slate-300 border border-slate-100 dark:border-slate-700'}`}>
-                                        {wizardStep > step ? <Check className="w-6 h-6" /> : step}
-                                    </div>
-                                    <span className={`text-[10px] font-black uppercase tracking-tighter ${wizardStep >= step ? 'text-primary' : 'text-slate-400'}`}>
-                                        {step === 1 ? "Identity" : step === 2 ? "Knowledge" : "Finalize"}
+                    {/* Stepper Header (Only for Wizard) */}
+                    {viewState === 'wizard' && (
+                        <div className="px-10 py-8 bg-slate-50/50 dark:bg-slate-900 border-b border-slate-100 dark:border-slate-700">
+                            <div className="flex justify-between items-center mb-10">
+                                <button onClick={resetWizard} className="flex items-center gap-2 text-slate-400 hover:text-slate-900 dark:hover:text-white font-black uppercase text-[10px] tracking-widest transition-colors">
+                                    <ChevronLeft className="w-4 h-4" /> Cancel Process
+                                </button>
+                                <div className="flex items-center gap-2">
+                                    <Sparkles className="w-4 h-4 text-primary" />
+                                    <span className="text-[10px] font-black uppercase text-slate-800 dark:text-white tracking-widest px-4 py-1.5 bg-white dark:bg-slate-800 rounded-full border border-slate-100 dark:border-slate-700">
+                                        Step {wizardStep} of 3
                                     </span>
                                 </div>
-                            ))}
+                            </div>
+
+                            <div className="flex items-center gap-6 relative px-2">
+                                <div className="absolute top-1/2 left-0 w-full h-1 bg-slate-100 dark:bg-slate-800 -translate-y-1/2 -z-0 rounded-full" />
+                                <div
+                                    className="absolute top-1/2 left-0 h-1 bg-primary -translate-y-1/2 -z-0 rounded-full transition-all duration-700"
+                                    style={{ width: `${((wizardStep - 1) / 2) * 100}%` }}
+                                />
+
+                                {[1, 2, 3].map(step => (
+                                    <div key={step} className="relative z-10 flex-1 flex flex-col items-center gap-3">
+                                        <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-black transition-all duration-500 shadow-sm ${wizardStep >= step ? 'bg-primary text-white scale-110' : 'bg-white dark:bg-slate-800 text-slate-300 border border-slate-100 dark:border-slate-700'}`}>
+                                            {wizardStep > step ? <Check className="w-6 h-6" /> : step}
+                                        </div>
+                                        <span className={`text-[10px] font-black uppercase tracking-tighter ${wizardStep >= step ? 'text-primary' : 'text-slate-400'}`}>
+                                            {step === 1 ? "Identity" : step === 2 ? "Knowledge" : "Finalize"}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
-                    </div>
+                    )}
+
+                    {/* Bot Type Selection View */}
+                    {viewState === 'type_selection' && (
+                        <div className="flex-1 p-10 flex flex-col items-center justify-center space-y-12 animate-in zoom-in-95 duration-500">
+                            <div className="text-center">
+                                <h2 className="text-4xl font-black text-slate-900 dark:text-white mb-2 font-outfit">What are you building?</h2>
+                                <p className="text-slate-500 font-bold uppercase tracking-widest text-xs">"Select the neural core type for your new agent."</p>
+                            </div>
+
+                            <div className="grid md:grid-cols-2 gap-8 w-full max-w-4xl">
+                                {/* Personal Assistant Card */}
+                                <motion.button
+                                    whileHover={{ y: -10 }}
+                                    onClick={() => {
+                                        setDraftAgent(prev => ({ ...prev, botType: 'personal_assistant', role: 'Personal Assistant' }));
+                                        setViewState('wizard');
+                                        setWizardStep(1);
+                                    }}
+                                    className="group bg-white dark:bg-slate-800 border-4 border-slate-100 dark:border-slate-700 p-8 rounded-[3rem] text-left hover:border-primary transition-all shadow-xl hover:shadow-primary/10 relative overflow-hidden"
+                                >
+                                    <div className="absolute top-6 right-6 p-2 bg-primary/10 rounded-xl text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <ChevronRight className="w-5 h-5" />
+                                    </div>
+                                    <div className="w-16 h-16 bg-blue-50 dark:bg-blue-900/20 rounded-[1.5rem] flex items-center justify-center text-blue-500 mb-6 group-hover:scale-110 transition-transform">
+                                        <User className="w-8 h-8 font-black" />
+                                    </div>
+                                    <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-2 font-outfit">Personal Assistant</h3>
+                                    <p className="text-slate-400 text-sm font-bold leading-relaxed mb-6">
+                                        Replies <span className="text-primary underline underline-offset-4 font-black">ONLY TO YOU</span>. Personal reminders, task management, and private chat.
+                                    </p>
+                                    <div className="flex gap-2">
+                                        <span className="text-[10px] font-black uppercase tracking-widest px-3 py-1 bg-slate-100 dark:bg-slate-700 rounded-lg">Private</span>
+                                        <span className="text-[10px] font-black uppercase tracking-widest px-3 py-1 bg-slate-100 dark:bg-slate-700 rounded-lg">High Trust</span>
+                                    </div>
+                                </motion.button>
+
+                                {/* Business Bot Card */}
+                                <motion.button
+                                    whileHover={{ y: -10 }}
+                                    onClick={() => {
+                                        setDraftAgent(prev => ({ ...prev, botType: 'business_bot', role: 'Sales Rep' }));
+                                        setViewState('wizard');
+                                        setWizardStep(1);
+                                    }}
+                                    className="group bg-white dark:bg-slate-800 border-4 border-slate-100 dark:border-slate-700 p-8 rounded-[3rem] text-left hover:border-primary transition-all shadow-xl hover:shadow-primary/10 relative overflow-hidden"
+                                >
+                                    <div className="absolute top-6 right-6 p-2 bg-primary/10 rounded-xl text-primary opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <ChevronRight className="w-5 h-5" />
+                                    </div>
+                                    <div className="w-16 h-16 bg-emerald-50 dark:bg-emerald-900/20 rounded-[1.5rem] flex items-center justify-center text-emerald-500 mb-6 group-hover:scale-110 transition-transform">
+                                        <Briefcase className="w-8 h-8 font-black" />
+                                    </div>
+                                    <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-2 font-outfit">Business Neural Bot</h3>
+                                    <p className="text-slate-400 text-sm font-bold leading-relaxed mb-6">
+                                        Replies to <span className="text-emerald-500 font-black">EVERYONE</span>. Customer support, sales, FAQs, and marketing flows.
+                                    </p>
+                                    <div className="flex gap-2">
+                                        <span className="text-[10px] font-black uppercase tracking-widest px-3 py-1 bg-slate-100 dark:bg-slate-700 rounded-lg">Broad Scale</span>
+                                        <span className="text-[10px] font-black uppercase tracking-widest px-3 py-1 bg-slate-100 dark:bg-slate-700 rounded-lg">Hiring Focus</span>
+                                    </div>
+                                </motion.button>
+                            </div>
+
+                            <button onClick={resetWizard} className="text-slate-400 font-black uppercase text-[10px] tracking-widest hover:text-slate-900 dark:hover:text-white">Back to Pipeline</button>
+                        </div>
+                    )}
 
                     {/* Content Area */}
-                    <div className="flex-1 p-10 md:p-14 overflow-y-auto hide-scrollbar bg-white dark:bg-slate-800">
-                        <AnimatePresence mode="wait">
-                            <motion.div
-                                key={wizardStep}
-                                initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }}
-                                className="space-y-10"
-                            >
-                                {wizardStep === 1 && (
-                                    <div className="space-y-8">
-                                        <div className="text-center md:text-left">
-                                            <h3 className="text-3xl font-black text-slate-900 dark:text-white mb-2 font-outfit">Hiring Identity</h3>
-                                            <p className="text-slate-400 font-medium italic">"A name shapes the personality. Choose wisely."</p>
-                                        </div>
-
-                                        <div className="space-y-3">
-                                            <label className="text-xs font-black uppercase text-slate-400 flex items-center gap-2">
-                                                Agent Display Name <span className="text-rose-500">*</span>
-                                            </label>
-                                            <input
-                                                type="text" value={draftAgent.name}
-                                                onChange={e => setDraftAgent({ ...draftAgent, name: e.target.value })}
-                                                placeholder="e.g. Priya (Real Estate Assistant)"
-                                                className="w-full bg-slate-50 dark:bg-slate-900/50 py-5 px-8 rounded-[1.5rem] border-2 border-slate-100 dark:border-slate-800 outline-none focus:border-primary transition-all font-black text-xl shadow-inner placeholder:text-slate-300"
-                                            />
-                                            {(draftAgent.name?.length || 0) < 3 && (
-                                                <p className="text-[10px] text-slate-400 font-bold px-2">Minimum 3 characters expected for a professional profile.</p>
-                                            )}
-                                        </div>
-
-                                        <div className="space-y-4">
-                                            <label className="text-xs font-black uppercase text-slate-400">Persona Profile</label>
-                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                {rolesList.map(r => (
-                                                    <button
-                                                        key={r.name} onClick={() => setDraftAgent({ ...draftAgent, role: r.name })}
-                                                        className={`p-5 rounded-[1.5rem] border-2 transition-all text-left flex items-start gap-4 ${draftAgent.role === r.name ? 'border-primary bg-primary/5 shadow-lg scale-[1.02]' : 'border-slate-100 dark:border-slate-800 hover:border-slate-200 bg-slate-50/30'}`}
-                                                    >
-                                                        <div className={`p-2.5 rounded-xl ${draftAgent.role === r.name ? 'bg-primary text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'}`}>
-                                                            <r.icon className="w-5 h-5" />
-                                                        </div>
-                                                        <div>
-                                                            <h5 className={`font-black text-sm ${draftAgent.role === r.name ? 'text-primary' : 'text-slate-800 dark:text-white'}`}>{r.name}</h5>
-                                                            <p className="text-[10px] text-slate-500 font-medium line-clamp-1">{r.desc}</p>
-                                                        </div>
-                                                    </button>
-                                                ))}
+                    {viewState === 'wizard' && (
+                        <div className="flex-1 p-10 md:p-14 overflow-y-auto hide-scrollbar bg-white dark:bg-slate-800">
+                            <AnimatePresence mode="wait">
+                                <motion.div
+                                    key={wizardStep}
+                                    initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -15 }}
+                                    className="space-y-10"
+                                >
+                                    {wizardStep === 1 && (
+                                        <div className="space-y-8">
+                                            <div className="text-center md:text-left">
+                                                <h3 className="text-3xl font-black text-slate-900 dark:text-white mb-2 font-outfit">Hiring Identity</h3>
+                                                <p className="text-slate-400 font-medium italic">"A name shapes the personality. Choose wisely."</p>
                                             </div>
-                                        </div>
-                                    </div>
-                                )}
 
-                                {wizardStep === 2 && (
-                                    <div className="space-y-8">
-                                        <div className="text-center md:text-left">
-                                            <h3 className="text-3xl font-black text-slate-900 dark:text-white mb-2 font-outfit">Training Module</h3>
-                                            <p className="text-slate-400 font-medium italic">"Upload the data and rules for your AI to follow."</p>
-                                        </div>
-
-                                        <div className="space-y-6">
                                             <div className="space-y-3">
-                                                <label className="text-xs font-black uppercase text-slate-400">Business Knowledge Base</label>
-                                                <textarea
-                                                    rows={5} value={draftAgent.businessInfo}
-                                                    onChange={e => setDraftAgent({ ...draftAgent, businessInfo: e.target.value })}
-                                                    placeholder="Example: We provide 2BHK flats in Noida starting at ₹80L. Features: modular kitchen, high security, 24/7 water..."
-                                                    className="w-full bg-slate-50 dark:bg-slate-900/50 p-6 rounded-[1.5rem] border-2 border-slate-100 dark:border-slate-800 outline-none focus:border-primary transition-all text-sm font-bold shadow-inner resize-none leading-relaxed"
+                                                <label className="text-xs font-black uppercase text-slate-400 flex items-center gap-2">
+                                                    Agent Display Name <span className="text-rose-500">*</span>
+                                                </label>
+                                                <input
+                                                    type="text" value={draftAgent.name}
+                                                    onChange={e => setDraftAgent({ ...draftAgent, name: e.target.value })}
+                                                    placeholder="e.g. Priya (Real Estate Assistant)"
+                                                    className="w-full bg-slate-50 dark:bg-slate-900/50 py-5 px-8 rounded-[1.5rem] border-2 border-slate-100 dark:border-slate-800 outline-none focus:border-primary transition-all font-black text-xl shadow-inner placeholder:text-slate-300"
                                                 />
+                                                {(draftAgent.name?.length || 0) < 3 && (
+                                                    <p className="text-[10px] text-slate-400 font-bold px-2">Minimum 3 characters expected for a professional profile.</p>
+                                                )}
                                             </div>
-                                            <div className="space-y-3">
-                                                <label className="text-xs font-black uppercase text-slate-400">Mental Map (System Instructions)</label>
-                                                <textarea
-                                                    rows={5} value={draftAgent.instructions}
-                                                    onChange={e => setDraftAgent({ ...draftAgent, instructions: e.target.value })}
-                                                    placeholder={DEFAULT_INSTRUCTIONS}
-                                                    className="w-full bg-slate-50 dark:bg-slate-900/50 p-6 rounded-[1.5rem] border-2 border-slate-100 dark:border-slate-800 outline-none focus:border-primary transition-all text-sm font-bold shadow-inner resize-none leading-relaxed italic text-slate-600 dark:text-slate-400"
-                                                />
+
+                                            <div className="space-y-4">
+                                                <label className="text-xs font-black uppercase text-slate-400">Persona Profile</label>
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                    {rolesList.map(r => (
+                                                        <button
+                                                            key={r.name} onClick={() => setDraftAgent({ ...draftAgent, role: r.name })}
+                                                            className={`p-5 rounded-[1.5rem] border-2 transition-all text-left flex items-start gap-4 ${draftAgent.role === r.name ? 'border-primary bg-primary/5 shadow-lg scale-[1.02]' : 'border-slate-100 dark:border-slate-800 hover:border-slate-200 bg-slate-50/30'}`}
+                                                        >
+                                                            <div className={`p-2.5 rounded-xl ${draftAgent.role === r.name ? 'bg-primary text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-400'}`}>
+                                                                <r.icon className="w-5 h-5" />
+                                                            </div>
+                                                            <div>
+                                                                <h5 className={`font-black text-sm ${draftAgent.role === r.name ? 'text-primary' : 'text-slate-800 dark:text-white'}`}>{r.name}</h5>
+                                                                <p className="text-[10px] text-slate-500 font-medium line-clamp-1">{r.desc}</p>
+                                                            </div>
+                                                        </button>
+                                                    ))}
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                )}
+                                    )}
 
-                                {wizardStep === 3 && (
-                                    <div className="space-y-8">
-                                        <div className="text-center md:text-left">
-                                            <h3 className="text-3xl font-black text-slate-900 dark:text-white mb-2 font-outfit">Protocol Activation</h3>
-                                            <p className="text-slate-400 font-medium italic">"Almost there. Secure the session and verify controls."</p>
-                                        </div>
+                                    {wizardStep === 2 && (
+                                        <div className="space-y-8">
+                                            <div className="text-center md:text-left">
+                                                <h3 className="text-3xl font-black text-slate-900 dark:text-white mb-2 font-outfit">Training Module</h3>
+                                                <p className="text-slate-400 font-medium italic">"Upload the data and rules for your AI to follow."</p>
+                                            </div>
 
-                                        <div className="bg-slate-50 dark:bg-slate-900/50 p-8 rounded-[2rem] space-y-5 border-2 border-slate-100 dark:border-slate-800 shadow-inner">
-                                            <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-2 tracking-widest">
-                                                <ShieldCheck className="w-4 h-4 text-emerald-500" /> Admin Access (WhatsApp Number)
-                                            </label>
-                                            {(draftAgent.ownerNumbers || [""]).map((num, i) => (
-                                                <div key={i} className="relative group">
-                                                    <Smartphone className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
-                                                    <input
-                                                        type="text" value={num}
-                                                        onChange={e => {
-                                                            const newNums = [...(draftAgent.ownerNumbers || [])];
-                                                            newNums[i] = e.target.value;
-                                                            setDraftAgent({ ...draftAgent, ownerNumbers: newNums });
-                                                        }}
-                                                        placeholder="91xxxxxxxx (Phone number with country code)"
-                                                        className="w-full bg-white dark:bg-slate-800 py-4 pl-12 pr-6 rounded-2xl border border-slate-100 dark:border-slate-700 font-black text-sm outline-none focus:border-primary transition-all"
+                                            <div className="space-y-6">
+                                                <div className="space-y-3">
+                                                    <label className="text-xs font-black uppercase text-slate-400">Business Knowledge Base</label>
+                                                    <textarea
+                                                        rows={5} value={draftAgent.businessInfo}
+                                                        onChange={e => setDraftAgent({ ...draftAgent, businessInfo: e.target.value })}
+                                                        placeholder="Example: We provide 2BHK flats in Noida starting at ₹80L. Features: modular kitchen, high security, 24/7 water..."
+                                                        className="w-full bg-slate-50 dark:bg-slate-900/50 p-6 rounded-[1.5rem] border-2 border-slate-100 dark:border-slate-800 outline-none focus:border-primary transition-all text-sm font-bold shadow-inner resize-none leading-relaxed"
                                                     />
                                                 </div>
-                                            ))}
-                                            <p className="text-[10px] text-slate-400 font-bold italic leading-tight">Admin numbers can control the AI directly and bypass automated sales flows.</p>
-                                        </div>
-
-                                        <div className="flex items-center justify-between p-8 bg-blue-50/50 dark:bg-primary/5 rounded-[2rem] border-2 border-blue-50/50 dark:border-slate-800">
-                                            <div className="flex items-center gap-4">
-                                                <div className="w-12 h-12 rounded-2xl bg-white dark:bg-slate-800 flex items-center justify-center text-primary shadow-sm">
-                                                    <Navigation className="w-6 h-6" />
-                                                </div>
-                                                <div>
-                                                    <p className="font-black text-slate-900 dark:text-white">Auto-Greeting Protocol</p>
-                                                    <p className="text-[10px] text-slate-500 font-bold">Initiate conversations immediately on new messages.</p>
+                                                <div className="space-y-3">
+                                                    <label className="text-xs font-black uppercase text-slate-400">Mental Map (System Instructions)</label>
+                                                    <textarea
+                                                        rows={5} value={draftAgent.instructions}
+                                                        onChange={e => setDraftAgent({ ...draftAgent, instructions: e.target.value })}
+                                                        placeholder={DEFAULT_INSTRUCTIONS}
+                                                        className="w-full bg-slate-50 dark:bg-slate-900/50 p-6 rounded-[1.5rem] border-2 border-slate-100 dark:border-slate-800 outline-none focus:border-primary transition-all text-sm font-bold shadow-inner resize-none leading-relaxed italic text-slate-600 dark:text-slate-400"
+                                                    />
                                                 </div>
                                             </div>
-                                            <label className="relative inline-flex items-center cursor-pointer">
-                                                <input
-                                                    type="checkbox" className="sr-only peer" checked={draftAgent.autoGreet}
-                                                    onChange={e => setDraftAgent({ ...draftAgent, autoGreet: e.target.checked })}
-                                                />
-                                                <div className="w-14 h-7 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-emerald-500 shadow-inner"></div>
-                                            </label>
                                         </div>
+                                    )}
+
+                                    {wizardStep === 3 && (
+                                        <div className="space-y-8">
+                                            <div className="text-center md:text-left">
+                                                <h3 className="text-3xl font-black text-slate-900 dark:text-white mb-2 font-outfit">Protocol Activation</h3>
+                                                <p className="text-slate-400 font-medium italic">"Almost there. Secure the session and verify controls."</p>
+                                            </div>
+
+                                            {draftAgent.botType !== 'personal_assistant' && (
+                                                <div className="bg-slate-50 dark:bg-slate-900/50 p-8 rounded-[2rem] space-y-5 border-2 border-slate-100 dark:border-slate-800 shadow-inner">
+                                                    <label className="text-[10px] font-black uppercase text-slate-400 flex items-center gap-2 tracking-widest">
+                                                        <ShieldCheck className="w-4 h-4 text-emerald-500" /> Admin Access (WhatsApp Number)
+                                                    </label>
+                                                    {(draftAgent.ownerNumbers || [""]).map((num, i) => {
+                                                        // Parse existing number to find country code
+                                                        const dialCode = COUNTRIES.find(c => num.startsWith(c.dial.replace('+', '')))?.dial.replace('+', '') || "91";
+                                                        const pureNumber = num.startsWith(dialCode) ? num.slice(dialCode.length) : num;
+
+                                                        return (
+                                                            <div key={i} className="flex gap-2">
+                                                                <select
+                                                                    className="bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-2xl px-3 text-sm font-black outline-none focus:border-primary transition-all"
+                                                                    value={dialCode}
+                                                                    onChange={(e) => {
+                                                                        const newNums = [...(draftAgent.ownerNumbers || [])];
+                                                                        newNums[i] = e.target.value + pureNumber;
+                                                                        setDraftAgent({ ...draftAgent, ownerNumbers: newNums });
+                                                                    }}
+                                                                >
+                                                                    {COUNTRIES.map(c => (
+                                                                        <option key={c.code} value={c.dial.replace('+', '')}>
+                                                                            {c.flag} {c.dial}
+                                                                        </option>
+                                                                    ))}
+                                                                </select>
+                                                                <div className="relative group flex-1">
+                                                                    <Smartphone className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
+                                                                    <input
+                                                                        type="text" value={pureNumber}
+                                                                        onChange={e => {
+                                                                            const sanitized = e.target.value.replace(/[^\d]/g, "");
+                                                                            const newNums = [...(draftAgent.ownerNumbers || [])];
+                                                                            newNums[i] = dialCode + sanitized;
+                                                                            setDraftAgent({ ...draftAgent, ownerNumbers: newNums });
+                                                                        }}
+                                                                        placeholder="Phone number without code"
+                                                                        className="w-full bg-white dark:bg-slate-800 py-4 pl-12 pr-6 rounded-2xl border border-slate-100 dark:border-slate-700 font-black text-sm outline-none focus:border-primary transition-all"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                    <p className="text-[10px] text-slate-400 font-bold italic leading-tight">Admin numbers can control the AI directly and bypass automated sales flows.</p>
+                                                </div>
+                                            )}
+
+                                            {draftAgent.botType === 'personal_assistant' && (
+                                                <div className="bg-blue-50/50 dark:bg-blue-900/10 p-8 rounded-[2rem] space-y-4 border-2 border-blue-100 dark:border-blue-800 shadow-inner">
+                                                    <label className="text-[10px] font-black uppercase text-slate-500 flex items-center gap-2 tracking-widest">
+                                                        <User className="w-4 h-4 text-blue-500" /> Your Private WhatsApp Number
+                                                    </label>
+                                                    {(() => {
+                                                        const num = draftAgent.ownerNumbers?.[0] || "";
+                                                        const dialCode = COUNTRIES.find(c => num.startsWith(c.dial.replace('+', '')))?.dial.replace('+', '') || "91";
+                                                        const pureNumber = num.startsWith(dialCode) ? num.slice(dialCode.length) : num;
+
+                                                        return (
+                                                            <div className="flex gap-2">
+                                                                <select
+                                                                    className="bg-white dark:bg-slate-800 border border-blue-100 dark:border-slate-700 rounded-2xl px-3 text-sm font-black outline-none focus:border-blue-500 transition-all text-blue-600"
+                                                                    value={dialCode}
+                                                                    onChange={(e) => {
+                                                                        setDraftAgent({ ...draftAgent, ownerNumbers: [e.target.value + pureNumber] });
+                                                                    }}
+                                                                >
+                                                                    {COUNTRIES.map(c => (
+                                                                        <option key={c.code} value={c.dial.replace('+', '')}>
+                                                                            {c.flag} {c.dial}
+                                                                        </option>
+                                                                    ))}
+                                                                </select>
+                                                                <div className="relative group flex-1">
+                                                                    <Smartphone className="absolute left-5 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-300" />
+                                                                    <input
+                                                                        type="text"
+                                                                        value={pureNumber}
+                                                                        onChange={e => {
+                                                                            const sanitized = e.target.value.replace(/[^\d]/g, "");
+                                                                            setDraftAgent({ ...draftAgent, ownerNumbers: [dialCode + sanitized] });
+                                                                        }}
+                                                                        placeholder="Your phone number"
+                                                                        className="w-full bg-white dark:bg-slate-800 py-4 pl-12 pr-6 rounded-2xl border border-blue-100 dark:border-slate-700 font-black text-sm outline-none focus:border-blue-500 transition-all"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                    <p className="text-[10px] text-blue-400 font-bold italic leading-tight">"The assistant will only reply when YOU send a message from this number."</p>
+                                                </div>
+                                            )}
+
+                                            <div className="flex items-center justify-between p-8 bg-blue-50/50 dark:bg-primary/5 rounded-[2rem] border-2 border-blue-50/50 dark:border-slate-800">
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-12 h-12 rounded-2xl bg-white dark:bg-slate-800 flex items-center justify-center text-primary shadow-sm">
+                                                        <Navigation className="w-6 h-6" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-black text-slate-900 dark:text-white">Auto-Greeting Protocol</p>
+                                                        <p className="text-[10px] text-slate-500 font-bold">Initiate conversations immediately on new messages.</p>
+                                                    </div>
+                                                </div>
+                                                <label className="relative inline-flex items-center cursor-pointer">
+                                                    <input
+                                                        type="checkbox" className="sr-only peer" checked={draftAgent.autoGreet}
+                                                        onChange={e => setDraftAgent({ ...draftAgent, autoGreet: e.target.checked })}
+                                                    />
+                                                    <div className="w-14 h-7 bg-slate-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[3px] after:left-[3px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all peer-checked:bg-emerald-500 shadow-inner"></div>
+                                                </label>
+                                            </div>
+                                        </div>
+                                    )}
+                                </motion.div>
+                            </AnimatePresence>
+                        </div>
+                    )}
+
+                    {/* QR View - rendered outside the wizard/type_selection condition */}
+                    {(viewState as string) === 'qr' && (
+                        <div className="flex-1 p-10 flex flex-col items-center justify-center space-y-8">
+                            <div className="text-center mb-4">
+                                <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-2 font-outfit">{connectionStatus}</h3>
+                                <p className="text-slate-400 font-medium">Link your WhatsApp to finalize the neural core setup.</p>
+                            </div>
+
+                            {qrCode ? (
+                                <div className="p-8 bg-white rounded-[2.5rem] shadow-2xl border-8 border-slate-50 relative group">
+                                    <div className="absolute inset-0 bg-primary/5 rounded-[2rem] scale-110 -rotate-2 -z-10 group-hover:rotate-1 transition-transform" />
+                                    <QRCode value={qrCode} size={256} level="H" />
+                                </div>
+                            ) : (
+                                <div className="w-64 h-64 bg-slate-50 dark:bg-slate-900 rounded-[2.5rem] flex items-center justify-center animate-pulse border-4 border-dashed border-slate-100 dark:border-slate-800">
+                                    <RefreshCw className="w-12 h-12 text-slate-200 animate-spin" />
+                                </div>
+                            )}
+
+                            <div className="flex items-center gap-4 mt-8">
+                                <div className="flex flex-col items-center gap-1 group cursor-help">
+                                    <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-white transition-all shadow-sm">
+                                        <ShieldCheck className="w-5 h-5" />
                                     </div>
-                                )}
-                            </motion.div>
-                        </AnimatePresence>
-                    </div>
+                                    <span className="text-[8px] font-black uppercase text-slate-400 tracking-widest">End-to-End</span>
+                                </div>
+                                <div className="w-px h-8 bg-slate-100 dark:bg-slate-800" />
+                                <div className="flex flex-col items-center gap-1 group cursor-help">
+                                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center group-hover:bg-blue-500 group-hover:text-white transition-all shadow-sm">
+                                        <Power className="w-5 h-5" />
+                                    </div>
+                                    <span className="text-[8px] font-black uppercase text-slate-400 tracking-widest">Neural Link</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Footer Actions (Mandatory Flow) */}
                     <div className="px-10 py-8 bg-slate-50/50 dark:bg-slate-900 border-t border-slate-100 dark:border-slate-700 flex justify-between gap-6">
@@ -732,11 +953,13 @@ export default function UnifiedAgentsPage() {
                                 <>
                                     <button
                                         onClick={editingAgentId ? handleEditSave : () => {
+                                            const newId = activeFullSessionId || `${uid}_agent-${Date.now().toString().slice(-6)}`;
                                             saveAgentToFirestore({
-                                                id: `draft-${Date.now()}`, name: draftAgent.name!, role: draftAgent.role!, gender: draftAgent.gender!, age: draftAgent.age!,
-                                                businessInfo: draftAgent.businessInfo!, instructions: draftAgent.instructions!, ownerNumbers: draftAgent.ownerNumbers!,
-                                                replyDelay: 2, autoGreet: draftAgent.autoGreet!, isActive: true, updatedAt: Date.now()
-                                            });
+                                                ...draftAgent,
+                                                id: newId,
+                                                isActive: true,
+                                                updatedAt: Date.now()
+                                            } as AgentConfig);
                                             showToast("Recruitment Archived", "Profile saved for later activation.", "success");
                                             resetWizard();
                                         }}
@@ -746,7 +969,7 @@ export default function UnifiedAgentsPage() {
                                     </button>
                                     {!editingAgentId && (
                                         <button
-                                            onClick={handleGenerateQR}
+                                            onClick={() => handleGenerateQR()}
                                             className="bg-primary text-white px-10 py-3.5 rounded-2xl font-black shadow-2xl shadow-primary/30 hover:scale-105 transition-all text-xs uppercase tracking-widest flex items-center gap-2"
                                         >
                                             <Smartphone className="w-4 h-4" /> Link & Deploy
@@ -924,7 +1147,7 @@ export default function UnifiedAgentsPage() {
                                     <div className="flex flex-col items-center gap-3 py-4">
                                         <AlertTriangle className="w-10 h-10 text-rose-500" />
                                         <p className="text-rose-500 font-black uppercase text-[10px] tracking-tighter px-6 leading-tight max-w-[200px]">{connectionStatus}</p>
-                                        <button onClick={handleGenerateQR} className="text-[9px] font-black uppercase tracking-widest text-primary hover:underline">Retry</button>
+                                        <button onClick={() => handleGenerateQR()} className="text-[9px] font-black uppercase tracking-widest text-primary hover:underline">Retry</button>
                                     </div>
                                 )}
                             </div>

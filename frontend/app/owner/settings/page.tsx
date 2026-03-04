@@ -43,6 +43,7 @@ export default function SettingsPage() {
     const [supportEmail, setSupportEmail] = useState("");
     const [helplinePhone, setHelplinePhone] = useState("");
     const [onboardingVideoUrl, setOnboardingVideoUrl] = useState("");
+    const [defaultTrialDays, setDefaultTrialDays] = useState(7);
 
     // Load config from Firestore
     useEffect(() => {
@@ -57,6 +58,7 @@ export default function SettingsPage() {
                     setAppName(d.appName || "BulkReply.io");
                     setSupportEmail(d.supportEmail || "");
                     setHelplinePhone(d.helplinePhone || "");
+                    setDefaultTrialDays(d.defaultTrialDays !== undefined ? d.defaultTrialDays : 7);
                 }
                 if (onboardingSnap.exists()) {
                     setOnboardingVideoUrl(onboardingSnap.data().videoUrl || "");
@@ -74,7 +76,7 @@ export default function SettingsPage() {
         try {
             await Promise.all([
                 setDoc(doc(db, "platform_config", "general"), {
-                    appName, supportEmail, helplinePhone, updatedAt: serverTimestamp()
+                    appName, supportEmail, helplinePhone, defaultTrialDays, updatedAt: serverTimestamp()
                 }, { merge: true }),
                 setDoc(doc(db, "platform_config", "onboarding"), {
                     videoUrl: onboardingVideoUrl, updatedAt: serverTimestamp()
@@ -214,6 +216,11 @@ export default function SettingsPage() {
                                         <div className="space-y-2">
                                             <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Support / Contact Email</label>
                                             <input type="email" value={supportEmail} onChange={e => setSupportEmail(e.target.value)} placeholder="support@bulkreply.io" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Default Free Trial (Days)</label>
+                                            <input type="number" min="0" value={defaultTrialDays} onChange={e => setDefaultTrialDays(parseInt(e.target.value) || 0)} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all text-indigo-900" />
+                                            <p className="text-[10px] text-slate-400 font-medium ml-1">Assigned automatically to new sign-ups.</p>
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Helpline Phone</label>

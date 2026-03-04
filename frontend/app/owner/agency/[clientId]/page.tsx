@@ -113,13 +113,13 @@ export default function ClientManagement() {
         if (!clientId) return;
         try {
             const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
-            const res = await fetch(`${baseUrl}/session/list?uid=agency_${clientId}`);
-            if (res.ok) {
+            const res = await fetch(`${baseUrl}/session/list?uid=agency_${clientId}`).catch(() => null);
+            if (res && res.ok) {
                 const data = await res.json();
                 setConnectedSessions(data.sessions || []);
             }
         } catch (e) {
-            console.error("Fetch Sessions Error:", e);
+            // Silently fail to avoid Next.js dev overlay freezing the screen when backend is restarting
         }
     }, [clientId]);
 
