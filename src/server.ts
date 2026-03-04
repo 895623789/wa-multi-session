@@ -3,7 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import multer from "multer";
 import { Whatsapp, FirebaseAdapter } from "./index";
-import { generateAutoReply, generateOutreach } from "./Services/AIHandler";
+import { generateAutoReply, generateOutreach, generateImageFromPrompt } from "./Services/AIHandler";
 import { generateAdminReply } from "./Services/AdminHandler";
 import { MessageQueue } from "./Services/MessageQueue";
 import { downloadMediaMessage } from "baileys";
@@ -326,32 +326,89 @@ const whatsapp = new Whatsapp({
     const remoteJid = msg.key.remoteJid;
     const isFromMe = msg.key.fromMe;
 
-    // Extract text and image
+    // Extract text, image, and document
     let text = msg.message?.conversation || msg.message?.extendedTextMessage?.text || "";
     let imageObject: { data: string, mimeType: string } | undefined = undefined;
+    let documentObject: { data: string, mimeType: string } | undefined = undefined;
 
+    // Handle Image
     const imageMessage = msg.message?.imageMessage;
     if (imageMessage) {
-      text = imageMessage.caption || text; // Use caption if available
+      text = imageMessage.caption || text;
       try {
         console.log(`[${msg.sessionId}] Downloading image from ${remoteJid}...`);
-        const buffer = await downloadMediaMessage(
-          msg,
-          'buffer',
-          {},
-          { logger: undefined, reuploadRequest: undefined }
-        );
-        imageObject = {
-          data: buffer.toString('base64'),
-          mimeType: imageMessage.mimetype || 'image/jpeg'
-        };
-        console.log(`[${msg.sessionId}] Automatically extracted base64 image (MIME: ${imageObject.mimeType})`);
+        const buffer = await downloadMediaMessage(msg, 'buffer', {}, { logger: undefined, reuploadRequest: undefined });
+        imageObject = { data: buffer.toString('base64'), mimeType: imageMessage.mimetype || 'image/jpeg' };
       } catch (err) {
-        console.error(`[${msg.sessionId}] Failed to download image message:`, err);
+        console.error(`[${msg.sessionId}] Failed to download image:`, err);
       }
     }
 
-    console.log(`[${msg.sessionId}] New Message from ${remoteJid}: ${text ? text : (imageObject ? "[Image attached]" : "Media/Other")}`);
+    // Handle Document (PDF)
+    const docMessage = msg.message?.documentMessage;
+    if (docMessage) {
+      text = docMessage.caption || text;
+      try {
+        console.log(`[${msg.sessionId}] Downloading document from ${remoteJid}...`);
+        const buffer = await downloadMediaMessage(msg, 'buffer', {}, { logger: undefined, reuploadRequest: undefined });
+        documentObject = { data: buffer.toString('base64'), mimeType: docMessage.mimetype || 'application/pdf' };
+      } catch (err) {
+        console.error(`[${msg.sessionId}] Failed to download document:`, err);
+      }
+    }
+
+    console.log(`[${msg.sessionId}] New Message from ${remoteJid}: ${text ? text : (imageObject ? "[Image]" : (documentObject ? "[Document]" : "Media"))}`);
+
+    // --- STRANGER INTERCEPTION (Power 5) ---
+    // If message is from a non-owner, forward it to the owner
+    const [botType, ownerNumber] = await Promise.all([
+      (whatsapp as any).adapter.readData(msg.sessionId, 'botType'),
+      (whatsapp as any).adapter.readData(msg.sessionId, 'ownerNumber')
+    ]);
+
+    const senderPhone = remoteJid?.split('@')[0];
+    const isOwner = ownerNumber && senderPhone === ownerNumber.replace(/[^\d]/g, "");
+
+    if (!isOwner && !isFromMe && ownerNumber && remoteJid && !remoteJid.includes('@g.us')) {
+      console.log(`📡 Intercepting message for owner from ${senderPhone}`);
+
+      // Fetch Bot Identity for generating a persona-based suggestion
+      const [instructions, businessInfo, name, role, gender, age] = await Promise.all([
+        (whatsapp as any).adapter.readData(msg.sessionId, 'instructions'),
+        (whatsapp as any).adapter.readData(msg.sessionId, 'businessInfo'),
+        (whatsapp as any).adapter.readData(msg.sessionId, 'name'),
+        (whatsapp as any).adapter.readData(msg.sessionId, 'role'),
+        (whatsapp as any).adapter.readData(msg.sessionId, 'gender'),
+        (whatsapp as any).adapter.readData(msg.sessionId, 'age')
+      ]);
+
+      const currentTime = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+      const interceptionPrompt = `[INTERCEPTION PROTOCOL] Boss, a stranger (${senderPhone}) just messaged the bot.
+Message: "${text || "[Media Attached]"}"
+Please summarize this for me and suggest a reply based on our business profile and my persona.`;
+
+      // Call AI to get a suggested reply
+      const suggestion = await generateAutoReply(
+        interceptionPrompt,
+        true, // Treating as owner context to get suggestion
+        instructions,
+        businessInfo,
+        msg.sessionId,
+        ownerNumber, // Note: Not using remoteJid (the stranger), but the owner
+        imageObject,
+        { name, role, gender, age },
+        documentObject,
+        currentTime
+      );
+
+      const forwardText = `🔔 *New Message Intercepted*\n\n*From:* ${senderPhone}\n*Bot:* ${msg.sessionId}\n*Message:* ${text || "[Media Attached]"}\n\n--- AI SUGGESTION ---\n${suggestion?.text || "I'm monitoring this, Boss. What should I do?"}`;
+
+      whatsapp.sendText({
+        sessionId: msg.sessionId,
+        to: ownerNumber,
+        text: forwardText
+      }).catch(e => console.error("Interception forward failed:", e));
+    }
 
     // --- SUBSCRIPTION CHECK FOR AI REPLIES (with 5-min cache) ---
     try {
@@ -399,8 +456,8 @@ const whatsapp = new Whatsapp({
       console.error("AI Sub check failed:", subErr);
     }
 
-    // 2. Ignore messages sent by us (to prevent infinite loops) or messages without text/image
-    if (isFromMe || (!text && !imageObject) || !remoteJid) return;
+    // 2. Ignore messages sent by us (to prevent infinite loops) or messages without text/media
+    if (isFromMe || (!text && !imageObject && !documentObject) || !remoteJid) return;
 
     // 3. Skip status broadcast and groups for now
     if (remoteJid === 'status@broadcast' || remoteJid.includes('@g.us')) return;
@@ -409,31 +466,21 @@ const whatsapp = new Whatsapp({
     const isActiveStr = await (whatsapp as any).adapter.readData(msg.sessionId, 'isActive', 'config');
     if (isActiveStr === 'false') {
       console.log(`⏸️ [${msg.sessionId}] Logic is paused. Ignoring message.`);
-      return; // Stop processing and ignore message immediately
+      return;
     }
 
     // --- BOT-TO-BOT LOOP PROTECTION ---
-    const senderPhone = remoteJid.split('@')[0];
     if (connectedBotPhones.has(senderPhone)) {
       console.warn(`🛑 [${msg.sessionId}] BLOCKED bot-to-bot message from ${senderPhone}`);
       return;
     }
 
     // --- PERSONAL ASSISTANT LOGIC ---
-    // If it's a personal assistant, ONLY reply to the owner
-    const [botType, ownerNumber] = await Promise.all([
-      (whatsapp as any).adapter.readData(msg.sessionId, 'botType'),
-      (whatsapp as any).adapter.readData(msg.sessionId, 'ownerNumber')
-    ]);
-
     if (botType === 'personal_assistant') {
       const cleanOwner = ownerNumber?.replace(/[^\d]/g, "");
       const cleanSender = senderPhone;
 
-      if (cleanOwner !== cleanSender) {
-        // Silently ignore messages from others for Personal Assistants
-        return;
-      }
+      if (cleanOwner !== cleanSender) return;
     }
 
     // --- RATE LIMIT CHECK ---
@@ -497,7 +544,7 @@ const whatsapp = new Whatsapp({
     });
 
     // 5. Generate AI Reply
-    const isOwner = ownerNumber && cleanJid === ownerNumber;
+    const isOwnerFinal = !!isOwner; // Use the isOwner calculated in Stranger Interception block
 
     // Fetch custom instructions, business info and identity for THIS session
     const [instructions, businessInfo, name, role, gender, age] = await Promise.all([
@@ -509,23 +556,90 @@ const whatsapp = new Whatsapp({
       (whatsapp as any).adapter.readData(msg.sessionId, 'age')
     ]);
 
-    const aiResponse = await generateAutoReply(
+    const currentTime = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+
+    const aiResult = await generateAutoReply(
       text,
-      !!isOwner,
+      isOwnerFinal,
       instructions,
       businessInfo,
       msg.sessionId,
       remoteJid,
       imageObject,
-      { name, role, gender, age }
+      { name, role, gender, age },
+      documentObject,
+      currentTime
     );
 
-    // 6. Send reply if AI responded
-    if (aiResponse) {
+    // 6. Process Tool Calls (Actions)
+    if (aiResult?.toolCalls) {
+      for (const call of aiResult.toolCalls) {
+        if (call.name === 'send_bulk_message') {
+          const { numbers, message, media } = call.args as { numbers: string[], message: string, media?: string };
+          console.log(`📡 [${msg.sessionId}] AI Action: Sending bulk message to ${numbers.length} contacts.`);
+
+          for (const num of numbers) {
+            const cleanNum = num.replace(/[^\d]/g, "");
+            if (cleanNum.length > 5) {
+              await queue.push(msg.sessionId, cleanNum, message, media);
+            }
+          }
+        }
+
+        if (call.name === 'generate_image') {
+          const { prompt, caption, sendTo } = call.args as { prompt: string, caption?: string, sendTo?: string[] };
+          console.log(`🎨 [${msg.sessionId}] AI Action: Generating image - "${prompt}"`);
+
+          // Notify the user that generation is starting
+          await whatsapp.sendText({ sessionId: msg.sessionId, to: remoteJid, text: `🎨 Generating image: "${prompt}"...` });
+
+          const imageUrl = await generateImageFromPrompt(prompt);
+
+          if (imageUrl) {
+            const targetNumbers = sendTo && sendTo.length > 0 ? sendTo.map(n => n.replace(/[^\d]/g, "")) : [remoteJid.split('@')[0]];
+            for (const num of targetNumbers) {
+              if (num.length > 5) {
+                // Push to queue as a media message (URL as media)
+                await queue.push(msg.sessionId, num, caption || `🎨 AI Generated Image: ${prompt}`, imageUrl);
+              }
+            }
+            // Only send a confirmation if sent to others (not self)
+            if (sendTo && sendTo.length > 0) {
+              await whatsapp.sendText({ sessionId: msg.sessionId, to: remoteJid, text: `✅ Image generated and queued for ${sendTo.length} contact(s)!` });
+            }
+          } else {
+            await whatsapp.sendText({ sessionId: msg.sessionId, to: remoteJid, text: `❌ Sorry Boss, image generation failed. Please try again with a different prompt.` });
+          }
+        }
+
+        if (call.name === 'schedule_task') {
+          const { type, time, data } = call.args as { type: string, time: string, data?: any };
+          console.log(`⏰ [${msg.sessionId}] AI Action: Scheduling ${type} for ${time}`);
+
+          try {
+            const db = getFirestore();
+            await db.collection('scheduled_tasks').add({
+              sessionId: msg.sessionId,
+              ownerNumber: ownerNumber,
+              type,
+              time: new Date(time).toISOString(),
+              data,
+              status: 'pending',
+              createdAt: new Date().toISOString()
+            });
+          } catch (err) {
+            console.error("Failed to schedule task:", err);
+          }
+        }
+      }
+    }
+
+    // 7. Send reply if AI responded with text
+    if (aiResult?.text) {
       console.log(`🤖 AI is replying to ${remoteJid}...`);
       try {
-        if (aiResponse.includes("[SPLIT]")) {
-          const parts = aiResponse.split("[SPLIT]").map(p => p.trim()).filter(p => p.length > 0);
+        if (aiResult.text.includes("[SPLIT]")) {
+          const parts = aiResult.text.split("[SPLIT]").map(p => p.trim()).filter(p => p.length > 0);
 
           // First part: Send as Tagged Reply
           await whatsapp.sendText({
@@ -542,7 +656,6 @@ const whatsapp = new Whatsapp({
               sessionId: msg.sessionId,
               to: remoteJid,
               text: parts[i]
-              // No answering/tagging here
             });
           }
         } else {
@@ -550,7 +663,7 @@ const whatsapp = new Whatsapp({
           await whatsapp.sendText({
             sessionId: msg.sessionId,
             to: remoteJid,
-            text: aiResponse,
+            text: aiResult.text,
             answering: msg
           });
         }
@@ -1091,9 +1204,111 @@ async function autoConnectActiveAgents() {
 
 app.listen(port, () => {
   console.log(`✅ Server is running on port ${port}`);
-  // Trigger auto-connect after server is listening
   autoConnectActiveAgents();
+  startTaskScheduler(); // Start the background task runner
   console.log("--------------------------------------------------");
-  console.log(`🚀 BulkReply.io API (Agency-Relaxed v2) running at http://localhost:${port}`);
+  console.log(`🚀 BulkReply.io API (Advanced AI v4) running at http://localhost:${port}`);
   console.log("--------------------------------------------------");
 });
+
+/**
+ * ⏰ Background Task Scheduler (Power 4)
+ * Runs every 60 seconds. Handles: messages, reminders, repeating tasks.
+ */
+function startTaskScheduler() {
+  console.log("⏳ Task Scheduler started. Polling every 60s for scheduled tasks...");
+  setInterval(async () => {
+    const db = getFirestore();
+    const now = new Date().toISOString();
+
+    try {
+      const tasksSnap = await db.collection('scheduled_tasks')
+        .where('status', '==', 'pending')
+        .where('time', '<=', now)
+        .get();
+
+      if (tasksSnap.empty) return;
+
+      console.log(`🔔 Scheduler: ${tasksSnap.size} tasks due.`);
+
+      for (const doc of tasksSnap.docs) {
+        const task = doc.data();
+        const taskId = doc.id;
+        const retryCount = task.retryCount || 0;
+        const MAX_RETRIES = 3;
+
+        // Immediately lock the task to prevent double-execution
+        await doc.ref.update({ status: 'processing' });
+
+        try {
+          // ── Execute based on type ─────────────────────────
+          if (task.type === 'message' && task.data?.numbers?.length > 0) {
+            // Send message to a list of contacts
+            for (const num of task.data.numbers) {
+              const cleanNum = num.replace(/[^\d]/g, "");
+              if (cleanNum.length > 5) {
+                await queue.push(task.sessionId, cleanNum, task.data.text || "", task.data.media);
+              }
+            }
+          } else if (task.type === 'reminder') {
+            // Remind the owner
+            await whatsapp.sendText({
+              sessionId: task.sessionId,
+              to: task.ownerNumber,
+              text: `⏰ *REMINDER* 🔔\n\n${task.data?.text || "No details provided."}\n\n_Scheduled by your AI Assistant_`
+            });
+          } else if (task.type === 'broadcast') {
+            // Broadcast a single message to multiple numbers
+            const numbers: string[] = task.data?.numbers || [];
+            for (const num of numbers) {
+              const cleanNum = num.replace(/[^\d]/g, "");
+              if (cleanNum.length > 5) {
+                await queue.push(task.sessionId, cleanNum, task.data.text || "", task.data.media);
+              }
+            }
+          }
+
+          // ── Handle Repeating Tasks ────────────────────────
+          const repeat = task.data?.repeat;
+          if (repeat === 'daily' || repeat === 'weekly') {
+            const nextDate = new Date(task.time);
+            if (repeat === 'daily') nextDate.setDate(nextDate.getDate() + 1);
+            if (repeat === 'weekly') nextDate.setDate(nextDate.getDate() + 7);
+
+            // Update to next execution time instead of marking complete
+            await doc.ref.update({ status: 'pending', time: nextDate.toISOString(), retryCount: 0 });
+            console.log(`🔄 Recurring task ${taskId} rescheduled for ${nextDate.toISOString()}`);
+          } else {
+            // Non-recurring: mark complete
+            await doc.ref.update({ status: 'completed', executedAt: now });
+          }
+
+          console.log(`✅ Scheduled task ${taskId} (${task.type}) executed.`);
+
+          // ── Notify Owner of Completion ────────────────────
+          if (task.ownerNumber && task.sessionId) {
+            const completionMsg = `✅ *Scheduled Task Done!*\n\n*Type:* ${task.type}\n*Contacts:* ${task.data?.numbers?.length || 1}\n*Time:* ${new Date(task.time).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`;
+            whatsapp.sendText({
+              sessionId: task.sessionId,
+              to: task.ownerNumber,
+              text: completionMsg
+            }).catch(() => { });
+          }
+
+        } catch (err) {
+          console.error(`❌ Task ${taskId} failed:`, err);
+          if (retryCount < MAX_RETRIES) {
+            // Retry: unlock the task with incremented retry counter
+            await doc.ref.update({ status: 'pending', retryCount: retryCount + 1 });
+            console.log(`🔁 Task ${taskId} will retry (${retryCount + 1}/${MAX_RETRIES})`);
+          } else {
+            await doc.ref.update({ status: 'failed', error: (err as any).message, failedAt: now });
+            console.error(`💀 Task ${taskId} permanently failed after ${MAX_RETRIES} retries.`);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Scheduler Poll Error:", err);
+    }
+  }, 60 * 1000);
+}

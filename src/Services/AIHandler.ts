@@ -1,7 +1,34 @@
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, SchemaType } from '@google/generative-ai';
 import { getFirestore } from 'firebase-admin/firestore';
 import * as dotenv from 'dotenv';
+import https from 'https';
 dotenv.config();
+
+/**
+ * Generates an image URL using Pollinations AI (free, no API key needed).
+ * Returns the image as a downloadable URL.
+ */
+export async function generateImageFromPrompt(prompt: string): Promise<string | null> {
+    try {
+        const encodedPrompt = encodeURIComponent(prompt);
+        const imageUrl = `https://image.pollinations.ai/prompt/${encodedPrompt}?width=1024&height=1024&nologo=true`;
+
+        // Pre-warm the URL (make request to generate image)
+        await new Promise<void>((resolve, reject) => {
+            https.get(imageUrl, (res) => {
+                res.resume(); // consume memory
+                if (res.statusCode === 200) resolve();
+                else reject(new Error(`Image generation returned status ${res.statusCode}`));
+            }).on('error', reject);
+        });
+
+        return imageUrl;
+    } catch (err) {
+        console.error("Pollinations AI Image generation failed:", err);
+        return null;
+    }
+}
+
 
 // ─── Gemini API Setup ───────────────────────────────────────────────────────
 const apiKey = process.env.GEMINI_API_KEY || '';
@@ -101,6 +128,87 @@ setInterval(() => {
     }
 }, 15 * 60 * 1000);
 
+// ─── AI Tools Definition ──────────────────────────────────────────────────
+const tools = [
+    {
+        functionDeclarations: [
+            {
+                name: "send_bulk_message",
+                description: "Sends a specific message to a list of phone numbers. Can optionally include an image. Use this ONLY when the Boss/Owner explicitly commands you to message other people or start a campaign.",
+                parameters: {
+                    type: SchemaType.OBJECT,
+                    properties: {
+                        numbers: {
+                            type: SchemaType.ARRAY,
+                            items: { type: SchemaType.STRING },
+                            description: "Array of phone numbers (e.g. ['919999999999', '918888888888'])"
+                        },
+                        message: {
+                            type: SchemaType.STRING,
+                            description: "The actual message text to send to these numbers."
+                        },
+                        media: {
+                            type: SchemaType.STRING,
+                            description: "Optional base64 image data or URL if you want to send an image along with the text."
+                        }
+                    },
+                    required: ["numbers", "message"]
+                }
+            },
+            {
+                name: "generate_image",
+                description: "Generates a new image based on a text description. Use this when the user asks you to 'create an image', 'generate a logo', 'draw something', etc.",
+                parameters: {
+                    type: SchemaType.OBJECT,
+                    properties: {
+                        prompt: {
+                            type: SchemaType.STRING,
+                            description: "Detailed description of the image to generate."
+                        },
+                        caption: {
+                            type: SchemaType.STRING,
+                            description: "Optional caption for the generated image."
+                        },
+                        sendTo: {
+                            type: SchemaType.ARRAY,
+                            items: { type: SchemaType.STRING },
+                            description: "Optional array of phone numbers to send the generated image to."
+                        }
+                    },
+                    required: ["prompt"]
+                }
+            },
+            {
+                name: "schedule_task",
+                description: "Schedules a message or reminder for the future. Use this for 'Remind me at...', 'Send this at...', 'Every morning at...', etc.",
+                parameters: {
+                    type: SchemaType.OBJECT,
+                    properties: {
+                        type: {
+                            type: SchemaType.STRING,
+                            description: "The type of task: 'message' (sending to someone else) or 'reminder' (sending back to the owner)."
+                        },
+                        time: {
+                            type: SchemaType.STRING,
+                            description: "The target time in ISO format or a human-readable duration (e.g., '2026-03-05T06:00:00Z', 'in 5 minutes', 'tomorrow at 10am')."
+                        },
+                        data: {
+                            type: SchemaType.OBJECT,
+                            properties: {
+                                text: { type: SchemaType.STRING },
+                                numbers: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+                                media: { type: SchemaType.STRING, description: "Optional: Base64 or URL for image campaigns." },
+                                repeat: { type: SchemaType.STRING, description: "Optional: 'daily', 'weekly', etc." }
+                            },
+                        }
+                    },
+                    required: ["type", "time"]
+                }
+            }
+        ]
+    }
+];
+
 // ─── Main Auto-Reply Function ───────────────────────────────────────────────
 export async function generateAutoReply(
     userMessage: string,
@@ -110,8 +218,10 @@ export async function generateAutoReply(
     sessionId: string = '',
     remoteJid: string = '',
     imageObject?: { data: string, mimeType: string },
-    identity?: { name?: string, role?: string, gender?: string, age?: string }
-): Promise<string | null> {
+    identity?: { name?: string, role?: string, gender?: string, age?: string },
+    documentObject?: { data: string, mimeType: string },
+    currentTime?: string
+): Promise<{ text: string, toolCalls?: any[] } | null> {
     if (!genAI) return null;
 
     // Build the role context
@@ -123,14 +233,15 @@ export async function generateAutoReply(
 - Follow their commands and instructions without question.
 - Help them with scheduling, management, business queries, campaign ideas.
 - Be loyal, friendly, and proactive with suggestions.
-- If they ask you to do something, confirm and execute.`;
+- **POWERS**: You can message others, generate images, extract numbers from PDF/Images, and schedule tasks/reminders. Confirm and execute using the available tools.`;
     } else {
         roleContext = `⚠️ IMPORTANT: The person messaging you RIGHT NOW is a CUSTOMER (not the owner).
 - You are a professional assistant representing the business.
 - Never say "Boss" to them. Be polite and professional.
 - Help them with their queries about the business/products/services.
 - If you don't know something, politely say you'll check and get back.
-- Guide them and try to convert them into a sale/lead if appropriate.`;
+- Guide them and try to convert them into a sale/lead if appropriate.
+- **RESTRICTIONS**: You CANNOT message other people for them. Only the Boss can command you to send messages to others.`;
     }
 
     const botName = identity?.name || "Neural Assistant";
@@ -159,27 +270,30 @@ ${businessInfo ? businessInfo : "No specific business details provided yet. Act 
 ${customInstructions ? customInstructions : "No custom instructions. Focus strictly on being a polite and helpful " + botRole + "."}
 
 - RULE 4 (NO HALLUCINATIONS): YOU ARE STRICTLY CONFINED to the [PROVIDED BUSINESS KNOWLEDGE]. If a user asks about a service, product, price, loan, or offer that is NOT explicitly mentioned above, you MUST say you don't know or don't offer it. Do NOT make up information.
-- RULE 5 (ROLE FOCUS): If your Role is 'Real Estate', do not talk about 'Loans' unless it is in the knowledge base. Always steer the conversation back to your specific role and business knowledge.
 
-[SENSITIVE DATA & COMMITMENTS (CRITICAL)]
-- RULE 6 (EXACT NUMBERS ONLY): If the business knowledge states "80% loan", NEVER say "up to 90%". If it lists "3 policies", NEVER invent a 4th policy. You must be MATHEMATICALLY EXACT.
-- RULE 7 (NO FAKE DISCOUNTS/OFFERS): NEVER offer a discount, freebie, or special pricing unless it is explicitly written in the [PROVIDED BUSINESS KNOWLEDGE] or [USER CUSTOM INSTRUCTIONS].
-- RULE 8 (SAFE ESCAPE CAUSE): If a user asks a highly sensitive question involving money, claims, legalities, or exact figures that you don't confidently know, DO NOT GUESS. Say something like: "For exact details on this, please speak to our senior team or contact our official number."
+--- ADVANCED CAPABILITIES & TOOLS ---
+1. **TIME AWARENESS**: The current local time is ${currentTime || new Date().toLocaleString()}. Use this to parse relative times like "tomorrow", "in 10 minutes", or "next Friday".
+2. **OCR & Extraction**: If the Boss sends a PDF or Image, extract all phone numbers. If a 10-digit number like "9988776655" is found, automatically format it as "919988776655" (Indian standard) if no code is present.
+3. **Scheduling**: You can schedule reminders for the Boss or messages for contacts at specific times. You can now also schedule MEDIA (images) by including it in the schedule_task tool.
+4. **Image Gen**: You can generate images for marketing or just for fun. Use the generate_image tool.
 
---- CONVERSATIONAL AWARENESS ---
-${roleContext}
+--- INTERCEPTION & PROACTIVE SUPPORT ---
+- If you are being asked to "Review" or "Suggest a Reply" for an intercepted message from a stranger:
+  - Summarize the stranger's query/intent.
+  - Suggest a draft reply based on your persona (${botRole}).
+  - Ask the Boss for permission to send it.
 
 --- FORMATTING & EXECUTION RULES ---
 1. CHATTY & NATURAL: Speak natively. If they use Hindi, reply in Hindi. If English, use English. If Hinglish, use Hinglish.
 2. EMOJIS: Use professional emojis natively to break up text.
 3. FORMATTING: Use *bold* for emphasis or keywords.
-4. MEMORY: You have chat history memory. NEVER repeat questions. Acknowledge previous context natively.
-5. FLOW: Use the '[SPLIT]' delimiter exactly once per response if the reply is longer than 2 sentences, to break the output into two natural, sequential WhatsApp messages.`;
+4. FLOW: Use the '[SPLIT]' delimiter exactly once per response if the reply is longer than 2 sentences, to break the output into two natural, sequential WhatsApp messages.`;
 
     try {
         const model = genAI.getGenerativeModel({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-1.5-flash',
             systemInstruction: systemPrompt,
+            tools: tools as any
         });
 
         // Load conversation history
@@ -190,33 +304,45 @@ ${roleContext}
         const geminiHistory = toGeminiHistory(history);
         const chat = model.startChat({ history: geminiHistory });
 
-        // Generate reply
-        let result;
+        // Build multimodal parts
+        const parts: any[] = [];
         if (imageObject) {
-            result = await chat.sendMessage([
-                userMessage ? userMessage : "What is in this image?",
-                {
-                    inlineData: {
-                        data: imageObject.data,
-                        mimeType: imageObject.mimeType
-                    }
+            parts.push({
+                inlineData: {
+                    data: imageObject.data,
+                    mimeType: imageObject.mimeType
                 }
-            ]);
-        } else {
-            result = await chat.sendMessage(userMessage);
+            });
+        }
+        if (documentObject) {
+            parts.push({
+                inlineData: {
+                    data: documentObject.data,
+                    mimeType: documentObject.mimeType
+                }
+            });
         }
 
-        const aiText = result.response.text() || "I'm sorry, I couldn't process that at the moment.";
+        // Add the user message text
+        parts.push(userMessage ? userMessage : (imageObject ? "What is in this image?" : (documentObject ? "What is in this document?" : "")));
+
+        // Generate reply
+        const result = await chat.sendMessage(parts);
+
+        const call = result.response.functionCalls()?.[0];
+        const aiText = result.response.text() || (call ? "Got it Boss, I'm on it!" : "I'm sorry, I couldn't process that.");
 
         // Save both user msg + AI response to history (persistent)
-        // Note: For history, we only save the text part to save DB space and tokens
         history.push(
-            { role: 'user', text: userMessage ? userMessage : "[Image Attached]", ts: Date.now() },
+            { role: 'user', text: userMessage ? userMessage : (imageObject ? "[Image Attached]" : (documentObject ? "[Document Attached]" : "[Media]")), ts: Date.now() },
             { role: 'model', text: aiText, ts: Date.now() }
         );
         await saveHistory(key, history);
 
-        return aiText;
+        return {
+            text: aiText,
+            toolCalls: result.response.functionCalls()
+        };
     } catch (error) {
         console.error("Gemini AI API Error:", error);
         return null;

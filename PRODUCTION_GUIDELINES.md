@@ -97,4 +97,15 @@ When deleting a Client, Agent, or Session, you **MUST** follow this exact order:
 
 **Failing to follow this sequence will lead to uncontrollable automated bots that can only be killed by a full VPS reboot—which violates our Zero-Downtime mission.**
 
-By following these rules, BulkReply.io will achieve WhatsApp-level infrastructure stability.
+---
+
+## 6. High-Concurrency & Anti-Ban Architecture (Message Queue)
+
+WhatsApp/Meta's AI is extremely aggressive at banning numbers that exhibit "Bot-Like" behavior (e.g., sending 100 messages in 1 second). To counter this while still maintaining massive scale, we use a **Multi-Queue Anti-Ban Architecture**:
+
+1. **Dedicated Workers (100% Parallelism):** The `MessageQueue` does NOT use a single loop. When a bot starts, it spawns its own isolated `while` loop in the Node.js event loop. 
+   - *Result:* If Bot A is sending 10,000 messages, Bot B does not have to wait in line. 100 bots can send messages at the exact same millisecond.
+2. **Human Mimicry (Anti-Ban):** Before any message is sent, the dedicated worker reads the message length, calculates the average human typing time, applies a randomized hesitation delay, and sends a `composing` (typing...) indicator to Meta's servers. **Do not remove this delay.**
+3. **Safe-Sleep & Auto-Retry:** If a bot temporarily loses internet connection right before sending a message, the worker will NOT fail the queue. It will push the message back to the top of the queue and "Sleep" for 10 seconds, waiting for the connection to recover.
+
+By following these rules, BulkReply.io will achieve WhatsApp-level infrastructure stability while maintaining near-zero ban rates.
