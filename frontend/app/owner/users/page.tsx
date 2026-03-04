@@ -19,6 +19,7 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { collection, onSnapshot, doc, updateDoc, deleteField } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { toast } from "@/components/Toast";
 
 interface FirestoreUser {
     uid: string;
@@ -76,13 +77,21 @@ export default function UsersList() {
 
     // Block user
     const handleBlock = async (uid: string) => {
-        if (!confirm("Are you sure you want to block this user? They will be locked out immediately.")) return;
         setActionLoading(uid);
         try {
+            // Bulk pause sessions in backend
+            const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+            await fetch(`${baseUrl}/session/bulk-status`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ prefix: uid, isActive: false })
+            }).catch(e => console.error("Bulk status update failed", e));
+
             await updateDoc(doc(db, "users", uid), { blocked: true });
+            toast("User Blocked", "The user has been locked out immediately.", "warning");
         } catch (err) {
             console.error("Block failed:", err);
-            alert("Block failed. Check console.");
+            toast("Block Failed", "Could not block user. Check console.", "error");
         }
         setActionLoading(null);
     };
@@ -92,9 +101,10 @@ export default function UsersList() {
         setActionLoading(uid);
         try {
             await updateDoc(doc(db, "users", uid), { blocked: deleteField() });
+            toast("User Unblocked", "Access has been restored successfully.", "success");
         } catch (err) {
             console.error("Unblock failed:", err);
-            alert("Unblock failed. Check console.");
+            toast("Unblock Failed", "Could not unblock user. Check console.", "error");
         }
         setActionLoading(null);
     };

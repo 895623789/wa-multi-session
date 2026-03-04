@@ -138,7 +138,22 @@ export default function AgencyPortal() {
 
     const deleteClient = async (id: string) => {
         if (confirm("Are you sure you want to delete this agency client? All historical data for this client will be lost.")) {
-            await deleteDoc(doc(db, "agencyClients", id));
+            try {
+                // Bulk delete sessions from backend first to clear RAM
+                const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+                await fetch(`${baseUrl}/session/bulk-delete`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ prefix: `agency_${id}` })
+                }).catch(e => console.error("Bulk delete failed", e));
+
+                // Then delete from Firestore
+                await deleteDoc(doc(db, "agencyClients", id));
+                // Optional: also delete their agents collection doc
+                await deleteDoc(doc(db, "agencyAgents", id)).catch(() => { });
+            } catch (error) {
+                console.error("Error deleting client:", error);
+            }
         }
     };
 

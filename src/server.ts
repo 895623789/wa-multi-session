@@ -56,12 +56,21 @@ function checkAiRateLimit(key: string): boolean {
   return true; // allowed
 }
 
-// Auto-clean rate map every 30 min
+// Auto-clean maps every 30 min to prevent memory leaks
 setInterval(() => {
   const now = Date.now();
-  for (const [key, entry] of aiRateMap) {
+
+  // 1. Clean AI Rate Map
+  for (const [key, entry] of aiRateMap.entries()) {
     if (now > entry.resetAt) aiRateMap.delete(key);
   }
+
+  // 2. Clean Subscription Cache
+  for (const [key, entry] of subCache.entries()) {
+    if (now > entry.expiresAt) subCache.delete(key);
+  }
+
+  console.log("🧹 Background Memory Cleanup: Purged stale rate limits and caches.");
 }, 30 * 60 * 1000);
 
 // --- DAILY API QUOTA TRACKER ---
@@ -220,7 +229,14 @@ const whatsapp = new Whatsapp({
       return;
     }
     console.log(`[${sessionId}] Connecting...`);
-    sessionStatuses.set(sessionId, { status: 'connecting' });
+    // 🔑 FIX: Don't overwrite pairing_code status — keep the code visible for frontend polling
+    const current = sessionStatuses.get(sessionId);
+    if (current?.status === 'pairing_code') {
+      // Keep pairingCode intact, just update status label
+      sessionStatuses.set(sessionId, { status: 'pairing_code', pairingCode: current.pairingCode });
+    } else {
+      sessionStatuses.set(sessionId, { status: 'connecting' });
+    }
   },
   onPairingCode: (sessionId, code) => {
     console.log(`[${sessionId}] Pairing Code: ${code}`);
@@ -388,6 +404,13 @@ const whatsapp = new Whatsapp({
 
     // 3. Skip status broadcast and groups for now
     if (remoteJid === 'status@broadcast' || remoteJid.includes('@g.us')) return;
+
+    // --- REAL-TIME STATUS CHECK (ON/OFF Logic) ---
+    const isActiveStr = await (whatsapp as any).adapter.readData(msg.sessionId, 'isActive', 'config');
+    if (isActiveStr === 'false') {
+      console.log(`⏸️ [${msg.sessionId}] Logic is paused. Ignoring message.`);
+      return; // Stop processing and ignore message immediately
+    }
 
     // --- BOT-TO-BOT LOOP PROTECTION ---
     const senderPhone = remoteJid.split('@')[0];
@@ -628,7 +651,7 @@ app.post("/session/start", checkSubscription, async (req: any, res) => {
  * Body: { "sessionId": "my-user-1", "phoneNumber": "91XXXXXXXXXX" }
  */
 app.post("/session/start-pairing", checkSubscription, async (req, res) => {
-  const { sessionId, uid, phoneNumber, ownerNumber, instructions, businessInfo } = req.body;
+  const { sessionId, uid, phoneNumber, ownerNumber, instructions, businessInfo, name, role, gender, age, botType } = req.body;
   if (!sessionId) return res.status(400).json({ error: "sessionId is required" });
   if (!phoneNumber) return res.status(400).json({ error: "phoneNumber is required" });
 
@@ -659,6 +682,17 @@ app.post("/session/start-pairing", checkSubscription, async (req, res) => {
         sessionStatuses.set(sessionId, { status: 'pairing_code', pairingCode: code });
       }
     });
+
+    // Save custom AI personality data
+    if (instructions) await (whatsapp as any).adapter.writeData(sessionId, 'instructions', 'config', instructions);
+    if (businessInfo) await (whatsapp as any).adapter.writeData(sessionId, 'businessInfo', 'config', businessInfo);
+    if (uid) await (whatsapp as any).adapter.writeData(sessionId, 'ownerUid', 'config', uid);
+    if (ownerNumber) await (whatsapp as any).adapter.writeData(sessionId, 'ownerNumber', 'config', ownerNumber);
+    if (botType) await (whatsapp as any).adapter.writeData(sessionId, 'botType', 'config', botType);
+    if (name) await (whatsapp as any).adapter.writeData(sessionId, 'name', 'config', name);
+    if (role) await (whatsapp as any).adapter.writeData(sessionId, 'role', 'config', role);
+    if (gender) await (whatsapp as any).adapter.writeData(sessionId, 'gender', 'config', gender);
+    if (age) await (whatsapp as any).adapter.writeData(sessionId, 'age', 'config', age);
 
     // --- AUTO-CLEANUP PENDING SESSIONS ---
     const existingTimer = pendingSessionTimeouts.get(sessionId);
@@ -731,6 +765,115 @@ app.delete("/session/delete/:sessionId", async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+/**
+ * Update Agent Identity Config Dynamically
+ * POST http://localhost:5000/session/update-config
+ */
+app.post("/session/update-config", async (req, res) => {
+  const { sessionId, name, role, gender, age, instructions, businessInfo, botType } = req.body;
+  if (!sessionId) return res.status(400).json({ error: "sessionId is required" });
+
+  try {
+    if (name !== undefined) await (whatsapp as any).adapter.writeData(sessionId, 'name', 'config', name);
+    if (role !== undefined) await (whatsapp as any).adapter.writeData(sessionId, 'role', 'config', role);
+    if (gender !== undefined) await (whatsapp as any).adapter.writeData(sessionId, 'gender', 'config', gender);
+    if (age !== undefined) await (whatsapp as any).adapter.writeData(sessionId, 'age', 'config', age);
+    if (instructions !== undefined) await (whatsapp as any).adapter.writeData(sessionId, 'instructions', 'config', instructions);
+    if (businessInfo !== undefined) await (whatsapp as any).adapter.writeData(sessionId, 'businessInfo', 'config', businessInfo);
+    if (botType !== undefined) await (whatsapp as any).adapter.writeData(sessionId, 'botType', 'config', botType);
+
+    console.log(`✅ Live config updated for session: ${sessionId}`);
+    res.json({ message: `Config for ${sessionId} updated successfully.` });
+  } catch (error: any) {
+    console.error("Error updating config:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Update Agent Logic Status Dynamically (ON/OFF Switch)
+ * POST http://localhost:5000/session/update-status
+ */
+app.post("/session/update-status", async (req, res) => {
+  const { sessionId, isActive } = req.body;
+  if (!sessionId) return res.status(400).json({ error: "sessionId is required" });
+  if (isActive === undefined) return res.status(400).json({ error: "isActive is required" });
+
+  try {
+    // Save as a string because adapter sometimes stringifies values
+    await (whatsapp as any).adapter.writeData(sessionId, 'isActive', 'config', isActive ? 'true' : 'false');
+
+    console.log(`⚡ Live logic status for [${sessionId}] set to: ${isActive ? 'ON' : 'OFF'}`);
+    res.json({ message: `Status for ${sessionId} updated to ${isActive ? 'ON' : 'OFF'}.` });
+  } catch (error: any) {
+    console.error("Error updating logic status:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Bulk Delete Sessions for a specific user/client
+ * POST http://localhost:5000/session/bulk-delete
+ */
+app.post("/session/bulk-delete", async (req, res) => {
+  const { prefix } = req.body; // e.g., "uid" or "agency_clientid"
+  if (!prefix) return res.status(400).json({ error: "prefix is required" });
+
+  try {
+    const sessionIds = await whatsapp.getSessionsIds();
+    const matches = sessionIds.filter(id => id.startsWith(prefix));
+
+    console.log(`🧹 Bulk deleting ${matches.length} sessions for prefix [${prefix}]...`);
+
+    for (const sessionId of matches) {
+      await whatsapp.deleteSession(sessionId);
+      sessionStatuses.delete(sessionId);
+
+      // Cleanup guards
+      for (const [phone, sid] of phoneToSessionGuard.entries()) {
+        if (sid === sessionId) {
+          phoneToSessionGuard.delete(phone);
+          break;
+        }
+      }
+      const timer = pendingSessionTimeouts.get(sessionId);
+      if (timer) {
+        clearTimeout(timer);
+        pendingSessionTimeouts.delete(sessionId);
+      }
+    }
+
+    res.json({ message: `Successfully deleted ${matches.length} sessions.`, deleted: matches });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * Bulk Update Status (Pause/Resume) for a specific user/client
+ * POST http://localhost:5000/session/bulk-status
+ */
+app.post("/session/bulk-status", async (req, res) => {
+  const { prefix, isActive } = req.body;
+  if (!prefix || isActive === undefined) return res.status(400).json({ error: "prefix and isActive are required" });
+
+  try {
+    const sessionIds = await whatsapp.getSessionsIds();
+    const matches = sessionIds.filter(id => id.startsWith(prefix));
+
+    console.log(`⚡ Bulk setting logic status to ${isActive} for ${matches.length} sessions...`);
+
+    for (const sessionId of matches) {
+      await (whatsapp as any).adapter.writeData(sessionId, 'isActive', 'config', isActive ? 'true' : 'false');
+    }
+
+    res.json({ message: `Updated ${matches.length} sessions to ${isActive ? 'ON' : 'OFF'}.` });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 
 /**
  * Get active session IDs
@@ -900,7 +1043,56 @@ app.post("/admin/upload-to-storage", upload.single('file'), async (req: any, res
   }
 });
 
+
+// ─── AUTO-CONNECT ACTIVE SESSIONS ON BOOT ───────────────────────────────────
+async function autoConnectActiveAgents() {
+  console.log("🔄 Starting Auto-Connect for Active WhatsApp Sessions...");
+  const db = getFirestore();
+  let connectCount = 0;
+
+  try {
+    // 1. Reconnect Personal & Business Bots from 'users' collection
+    const usersSnap = await db.collection("users").get();
+    for (const userDoc of usersSnap.docs) {
+      // Reconnect all agents that were previously linked
+      const agentsSnap = await userDoc.ref.collection("agents").get();
+      for (const agentDoc of agentsSnap.docs) {
+        const agentId = agentDoc.id;
+        console.log(`🔌 Auto-connecting User Agent: ${agentId}`);
+        whatsapp.startSession(agentId, { printQR: false }).catch(err => {
+          console.error(`❌ Failed to auto-connect ${agentId}:`, err.message);
+        });
+        connectCount++;
+      }
+    }
+
+    // 2. Reconnect Agency Bots from 'agencyAgents' collection
+    const agencyDocs = await db.collection("agencyAgents").get();
+    for (const doc of agencyDocs.docs) {
+      const data = doc.data();
+      if (data.agents && Array.isArray(data.agents)) {
+        for (const agent of data.agents) {
+          if (agent.id) {
+            console.log(`🔌 Auto-connecting Agency Agent: ${agent.id}`);
+            whatsapp.startSession(agent.id, { printQR: false }).catch(err => {
+              console.error(`❌ Failed to auto-connect ${agent.id}:`, err.message);
+            });
+            connectCount++;
+          }
+        }
+      }
+    }
+
+    console.log(`✅ Auto-Connect complete: Triggered reconnection for ${connectCount} agents.`);
+  } catch (error) {
+    console.error("❌ Error during Auto-Connect:", error);
+  }
+}
+
 app.listen(port, () => {
+  console.log(`✅ Server is running on port ${port}`);
+  // Trigger auto-connect after server is listening
+  autoConnectActiveAgents();
   console.log("--------------------------------------------------");
   console.log(`🚀 BulkReply.io API (Agency-Relaxed v2) running at http://localhost:${port}`);
   console.log("--------------------------------------------------");

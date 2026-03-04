@@ -37,32 +37,46 @@ export class MessageQueue {
         return await this.db.collection(COLLECTION).add(task);
     }
 
+    private processingSessions = new Set<string>();
+
     /**
-     * Starts the global worker loop
+     * Starts the global worker loop with multi-session parallelism
      */
     async startWorker() {
         if (this.isRunning) return;
         this.isRunning = true;
-        console.log("🛡️ Anti-Ban Queue Worker Started");
+        console.log("🛡️ High-Concurrency Anti-Ban Queue Worker Started");
 
         while (this.isRunning) {
             try {
-                // Get one pending message (simplified query to avoid index requirement)
+                // Find pending messages that aren't already being processed by their respective session workers
                 const snapshot = await this.db.collection(COLLECTION)
                     .where("status", "==", "pending")
-                    .limit(1)
+                    .limit(20) // Snag a batch
                     .get();
 
                 if (snapshot.empty) {
-                    // No messages to process, wait 3 seconds
                     await new Promise(resolve => setTimeout(resolve, 3000));
                     continue;
                 }
 
-                const doc = snapshot.docs[0];
-                const task = { id: doc.id, ...doc.data() } as QueueTask;
+                for (const doc of snapshot.docs) {
+                    const task = { id: doc.id, ...doc.data() } as QueueTask;
 
-                await this.processTask(task);
+                    // If this bot is already busy sending a message, skip to the next one in the batch
+                    // This preserves the anti-ban sequence for individual bots while allowing
+                    // Bot A and Bot B to send messages simultaneously.
+                    if (this.processingSessions.has(task.sessionId)) continue;
+
+                    // Spawn a parallel processor for this session
+                    this.processingSessions.add(task.sessionId);
+                    this.processTask(task).finally(() => {
+                        this.processingSessions.delete(task.sessionId);
+                    });
+                }
+
+                // Small breath between batch checks
+                await new Promise(resolve => setTimeout(resolve, 1000));
 
             } catch (error) {
                 console.error("Queue Worker Error:", error);

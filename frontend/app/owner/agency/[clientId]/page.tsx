@@ -163,6 +163,33 @@ export default function ClientManagement() {
         setNewAgent({ name: "", role: "Sales Assistant", businessInfo: "", instructions: "" });
     };
 
+    const handleToggleActive = async (agent: AgentConfig) => {
+        const newIsActive = agent.isActive !== undefined ? !agent.isActive : false;
+        const updatedAgents = agents.map(a =>
+            a.id === agent.id ? { ...a, isActive: newIsActive } : a
+        );
+        setAgents(updatedAgents);
+
+        try {
+            await updateDoc(doc(db, "agencyAgents", clientId), {
+                agents: updatedAgents
+            });
+
+            // Sync with active WhatsApp session immediately
+            const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+            fetch(`${baseUrl}/session/update-status`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    sessionId: agent.id,
+                    isActive: newIsActive
+                })
+            }).catch(e => console.error("Failed to sync logic status", e));
+        } catch (err) {
+            console.error("Failed to toggle agent logic:", err);
+        }
+    };
+
     const handleEditClick = (agent: AgentConfig) => {
         setNewAgent({
             name: agent.name,
@@ -195,6 +222,21 @@ export default function ClientManagement() {
             await updateDoc(doc(db, "agencyAgents", clientId), {
                 agents: updatedAgents
             });
+
+            // Sync with active WhatsApp session immediately
+            const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+            fetch(`${baseUrl}/session/update-config`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    sessionId: editAgentId,
+                    name: newAgent.name,
+                    role: newAgent.role,
+                    instructions: newAgent.instructions,
+                    businessInfo: newAgent.businessInfo
+                })
+            }).catch(e => console.error("Failed to sync live config", e));
+
             setIsEditModalOpen(false);
             setEditAgentId(null);
             setNewAgent({ name: "", role: "Sales Assistant", businessInfo: "", instructions: "" });
@@ -214,11 +256,17 @@ export default function ClientManagement() {
         try {
             const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
             const endpoint = type === 'qr' ? '/session/start' : '/session/start-pairing';
+            const targetAgent = agents.find(a => a.id === agentId);
             const body: any = {
                 uid: `agency_${clientId}`,
                 sessionId: agentId,
-                instructions: agents.find(a => a.id === agentId)?.instructions || "",
-                businessInfo: agents.find(a => a.id === agentId)?.businessInfo || ""
+                instructions: targetAgent?.instructions || "",
+                businessInfo: targetAgent?.businessInfo || "",
+                name: targetAgent?.name || "AI Agent",
+                role: targetAgent?.role || "Business Representative",
+                gender: targetAgent?.gender || "Female",
+                age: targetAgent?.age || 25,
+                botType: targetAgent?.botType || "business_bot"
             };
 
             if (type === 'pairing') {
@@ -272,14 +320,23 @@ export default function ClientManagement() {
 
                             if (sData.status === 'connected') {
                                 clearInterval(pollInterval);
+                                setPairingCode(""); // clear it
+                                setQrCode("");
                                 setViewState('list');
                                 setIsGenerating(false);
+                                alert("Successfully connected Whatsapp Session!");
                                 fetchBackendSessions();
+                                // Also fetch agents again to reflect new status
+                                fetchClientData();
                             }
 
                             if (sData.status === 'duplicate_rejected') { // Removed 'disconnected' check
                                 setIsGenerating(false);
+                                setPairingCode("");
+                                setQrCode("");
                                 clearInterval(pollInterval);
+                                alert("Failed: This number is already connected to another agent in the system.");
+                                setViewState('list');
                             }
 
                             // Timeout if no code generated
@@ -456,6 +513,17 @@ export default function ClientManagement() {
                                                     <span className="text-slate-400 text-xs font-black uppercase tracking-tight">Offline</span>
                                                 </div>
                                             )}
+                                        </div>
+
+                                        <div className="flex flex-col items-center">
+                                            <span className="text-[9px] font-black uppercase text-slate-400 tracking-tighter mb-1">Logic Switch</span>
+                                            <label className="relative inline-flex items-center cursor-pointer">
+                                                <input
+                                                    type="checkbox" className="sr-only peer" checked={agent.isActive ?? true}
+                                                    onChange={() => handleToggleActive(agent)}
+                                                />
+                                                <div className="w-12 h-6 bg-slate-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600 shadow-inner"></div>
+                                            </label>
                                         </div>
                                     </div>
 

@@ -83,6 +83,7 @@ export default function UnifiedAgentsPage() {
 
     // Connection & QR State
     const [qrCode, setQrCode] = useState("");
+    const [pairingCode, setPairingCode] = useState("");
     const [connectionStatus, setConnectionStatus] = useState("");
     const [isPolling, setIsPolling] = useState(false);
     const [activeFullSessionId, setActiveFullSessionId] = useState("");
@@ -184,30 +185,64 @@ export default function UnifiedAgentsPage() {
         try {
             const { id, ...data } = finalAgent;
             await setDoc(doc(db, "users", uid, "agents", id), data, { merge: true });
+
+            // Sync with active WhatsApp session immediately
+            const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+
+            // Sync Persona Config
+            fetch(`${baseUrl}/session/update-config`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    sessionId: id,
+                    name: finalAgent.name,
+                    role: finalAgent.role,
+                    gender: finalAgent.gender,
+                    age: finalAgent.age,
+                    botType: finalAgent.botType,
+                    instructions: finalAgent.instructions,
+                    businessInfo: finalAgent.businessInfo
+                })
+            }).catch(e => console.error("Failed to sync live config", e));
+
+            // Sync Logic Status (ON/OFF)
+            fetch(`${baseUrl}/session/update-status`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    sessionId: id,
+                    isActive: finalAgent.isActive
+                })
+            }).catch(e => console.error("Failed to sync logic status", e));
+
         } catch (err) {
             console.error("Failed to save agent:", err);
         }
     };
 
     const deleteAgentAction = async (agentId: string) => {
-        // Remove from Firestore
+        // 1. Attempt Backend Disconnect FIRST (Priority: Stop the Bot)
+        try {
+            const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+            // Inform backend to kill the session and clear memory
+            await fetch(`${baseUrl}/session/delete/${agentId}?uid=${uid}`, { method: "DELETE" });
+            await fetchBackendSessions();
+        } catch (e) {
+            console.error("Backend disconnect error (Ghost Bot risk):", e);
+            // We still proceed, but the backend worker already had its chance
+        }
+
+        // 2. Remove from Firestore SECOND (Persistence Cleanup)
         try {
             if (uid) {
                 await deleteDoc(doc(db, "users", uid, "agents", agentId));
             }
+            showToast("Agent Deleted", "Recruitment terminated successfully.", "success");
         } catch (err) {
             console.error("Firestore delete error:", err);
+            showToast("Database Sync Error", "Agent record could not be removed.", "error");
         }
 
-        // Attempt Backend Disconnect
-        try {
-            const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
-            await fetch(`${baseUrl}/session/delete/${agentId}?uid=${uid}`, { method: "DELETE" });
-            await fetchBackendSessions();
-            showToast("Agent Deleted", "Recruitment terminated successfully.", "success");
-        } catch (e) {
-            showToast("Success", "Agent removed from pipeline.", "success");
-        }
         setDeleteModal({ isOpen: false, agent: null, lang: 'hi' });
     };
 
@@ -274,7 +309,7 @@ export default function UnifiedAgentsPage() {
             });
             const data = await res.json();
             setConnectionStatus(data.message || data.error);
-            if (data.message?.includes('started')) {
+            if (data.message?.includes('started') || data.message?.includes('initiated') || data.message?.includes('Pairing')) {
                 setIsPolling(true);
             } else if (data.message?.includes('already active')) {
                 handleConnectionSuccess(sessionIdToUse);
@@ -325,13 +360,21 @@ export default function UnifiedAgentsPage() {
 
                 if (statusData.qr) {
                     setQrCode(statusData.qr);
+                    setPairingCode(""); // QR mila, pairing code clear karo
                     setConnectionStatus("Step 4: Scan with WhatsApp");
+                }
+                // ✅ FIX: Pairing code capture
+                if (statusData.pairingCode) {
+                    setPairingCode(statusData.pairingCode);
+                    setQrCode(""); // Pairing code mila, QR clear karo
+                    setConnectionStatus("Enter this code in WhatsApp → Settings → Linked Devices");
                 }
                 if (statusData.status === 'connected') {
                     handleConnectionSuccess(activeFullSessionId);
                 }
                 if (statusData.status === 'duplicate_rejected') {
                     setQrCode("");
+                    setPairingCode("");
                     setIsPolling(false);
                     setDuplicateModal({ isOpen: true, lang: 'en' });
                 }
@@ -346,6 +389,8 @@ export default function UnifiedAgentsPage() {
         setWizardStep(1);
         setActiveFullSessionId("");
         setIsChangingNumber(false);
+        setQrCode("");
+        setPairingCode("");
         setDraftAgent({
             name: "",
             role: "Sales Representative",
@@ -897,11 +942,34 @@ export default function UnifiedAgentsPage() {
                     {(viewState as string) === 'qr' && (
                         <div className="flex-1 p-10 flex flex-col items-center justify-center space-y-8">
                             <div className="text-center mb-4">
-                                <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-2 font-outfit">{connectionStatus}</h3>
+                                <h3 className="text-2xl font-black text-slate-900 dark:text-white mb-2 font-outfit">{connectionStatus || "Initiating Secure Pipeline..."}</h3>
                                 <p className="text-slate-400 font-medium">Link your WhatsApp to finalize the neural core setup.</p>
                             </div>
 
-                            {qrCode ? (
+                            {/* ── Pairing Code Display ── */}
+                            {pairingCode ? (
+                                <div className="text-center space-y-6">
+                                    <p className="text-xs font-black uppercase tracking-widest text-slate-400">Your 8-Digit Pairing Code</p>
+                                    <div className="flex gap-3 justify-center flex-wrap">
+                                        {pairingCode.split("").map((char, i) => (
+                                            <div key={i} className={`w-12 h-14 flex items-center justify-center rounded-2xl text-2xl font-black shadow-lg border-2 transition-all
+                                                ${i === 4 ? 'ml-4' : ''}
+                                                bg-white dark:bg-slate-800 border-primary/30 text-primary`}>
+                                                {char}
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="bg-blue-50 dark:bg-blue-900/20 rounded-2xl p-5 max-w-sm text-left space-y-2">
+                                        <p className="text-xs font-black text-blue-600 uppercase tracking-widest">👉 Steps to Link:</p>
+                                        <p className="text-xs text-slate-600 dark:text-slate-300 font-bold">1. Open <strong>WhatsApp</strong> on your phone</p>
+                                        <p className="text-xs text-slate-600 dark:text-slate-300 font-bold">2. Go to <strong>Settings → Linked Devices</strong></p>
+                                        <p className="text-xs text-slate-600 dark:text-slate-300 font-bold">3. Tap <strong>"Link a Device"</strong></p>
+                                        <p className="text-xs text-slate-600 dark:text-slate-300 font-bold">4. Choose <strong>"Link with phone number instead"</strong></p>
+                                        <p className="text-xs text-slate-600 dark:text-slate-300 font-bold">5. Enter the code shown above ☝️</p>
+                                    </div>
+                                </div>
+                            ) : qrCode ? (
+
                                 <div className="p-8 bg-white rounded-[2.5rem] shadow-2xl border-8 border-slate-50 relative group">
                                     <div className="absolute inset-0 bg-primary/5 rounded-[2rem] scale-110 -rotate-2 -z-10 group-hover:rotate-1 transition-transform" />
                                     <QRCode value={qrCode} size={256} level="H" />

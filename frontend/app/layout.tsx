@@ -3,6 +3,7 @@ import { Inter, Outfit, Manrope } from "next/font/google";
 import "./globals.css";
 import AuthProviderWrapper from "@/components/AuthProviderWrapper";
 import { ThemeProvider } from "@/lib/ThemeContext";
+import { ToastContainer } from "@/components/Toast";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const outfit = Outfit({ subsets: ["latin"], variable: "--font-outfit" });
@@ -37,6 +38,7 @@ export default function RootLayout({
       <body className={`${manrope.className} ${outfit.variable} ${inter.variable} font-display page-bg min-h-screen antialiased`}>
         <ThemeProvider>
           <AuthProviderWrapper>{children}</AuthProviderWrapper>
+          <ToastContainer />
         </ThemeProvider>
       </body>
     </html>
