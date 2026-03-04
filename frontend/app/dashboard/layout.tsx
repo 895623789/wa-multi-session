@@ -9,11 +9,12 @@ import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { LayoutDashboard, MessageCircle, Send, Settings, LogOut, User, Bot } from "lucide-react";
 import SubscriptionBanner from "@/components/SubscriptionBanner";
+import BlockedScreen from "@/components/BlockedScreen";
 
 const mobileNavLinks = [
     { name: "Home", href: "/dashboard", icon: LayoutDashboard },
-    { name: "AI", href: "/dashboard/ai", icon: Settings },
-    { name: "Agents", href: "/dashboard/agents", icon: Bot },
+    { name: "AI", href: "/dashboard/ai", icon: Bot },
+    { name: "Agents", href: "/dashboard/agents", icon: Settings },
     { name: "Campaigns", href: "/dashboard/campaigns", icon: Send },
     { name: "Profile", href: "/dashboard/profile", icon: User },
 ];
@@ -68,6 +69,11 @@ export default function DashboardLayout({
     if (!loading && userData && !userData.onboardingComplete) {
         router.replace("/onboarding");
         return null;
+    }
+
+    // Block guard — real-time via Firestore onSnapshot in AuthProvider
+    if (!loading && userData?.blocked === true) {
+        return <BlockedScreen />;
     }
 
     const isAdminRoute = pathname === '/dashboard/ai';

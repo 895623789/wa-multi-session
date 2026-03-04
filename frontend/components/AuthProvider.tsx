@@ -15,8 +15,9 @@ export interface UserData {
     teamSize: string;
     role: string;
     owner?: string | boolean;
+    blocked?: boolean;
     location: string;
-    photoURL?: string; // Newly added
+    photoURL?: string;
     onboardingComplete: boolean;
     plan: string;
     sessions: string[];

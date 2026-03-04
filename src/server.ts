@@ -25,6 +25,9 @@ const sessionStatuses = new Map<string, { status: string, qr?: string, pairingCo
 // Guard: Track phone numbers to prevent duplicate connections
 // Key: phone number (cleaned), Value: sessionId that owns it
 const phoneToSessionGuard = new Map<string, string>();
+const pendingSessionTimeouts = new Map<string, NodeJS.Timeout>();
+// Guard: Sessions killed due to duplicate detection — prevent reconnect loop
+const killedSessions = new Set<string>();
 
 // --- SaaS Subscription Logic ---
 import { getFirestore } from "firebase-admin/firestore";
@@ -111,6 +114,11 @@ const whatsapp = new Whatsapp({
   adapter: new FirebaseAdapter(),
   autoLoad: false,
   onConnecting: (sessionId) => {
+    // Block killed/duplicate sessions from reconnecting
+    if (killedSessions.has(sessionId)) {
+      console.log(`🛑 Blocked reconnect for killed session: ${sessionId}`);
+      return;
+    }
     console.log(`[${sessionId}] Connecting...`);
     sessionStatuses.set(sessionId, { status: 'connecting' });
   },
@@ -120,6 +128,13 @@ const whatsapp = new Whatsapp({
   },
   onConnected: async (sessionId) => {
     console.log(`[${sessionId}] Connected`);
+
+    // Clean up pending timeout if exists
+    const pendingTimer = pendingSessionTimeouts.get(sessionId);
+    if (pendingTimer) {
+      clearTimeout(pendingTimer);
+      pendingSessionTimeouts.delete(sessionId);
+    }
 
     // --- DUPLICATE PHONE NUMBER GUARD ---
     try {
@@ -131,26 +146,30 @@ const whatsapp = new Whatsapp({
         if (existingOwner && existingOwner !== sessionId) {
           // This phone number is ALREADY connected under a different session!
           console.warn(`🚫 Duplicate phone detected! ${phoneNumber} is already in session '${existingOwner}'. Rejecting '${sessionId}'...`);
+
+          // 1. Mark as killed to prevent reconnect loop
+          killedSessions.add(sessionId);
+
+          // 2. Set status so frontend can detect it
           sessionStatuses.set(sessionId, {
             status: 'duplicate_rejected',
             qr: undefined
           });
 
-          // 🔥 IMMEDIATELY wipe Firebase credentials so this session won't reload on server restart
-          try {
-            await session?.store?.clearCreds();
-            console.log(`🗑️ Firebase credentials cleared for duplicate session '${sessionId}'`);
-          } catch (cleanErr) {
-            console.error(`Failed to clear Firebase creds for '${sessionId}':`, cleanErr);
-          }
-
-          // After a delay, end the socket cleanly so frontend polling can detect status
+          // 3. Fully destroy the session after a short delay (so frontend can read status)
           setTimeout(async () => {
             try {
-              session?.sock?.end(undefined);
-            } catch (_) { }
-            sessionStatuses.delete(sessionId);
-          }, 6000);
+              await whatsapp.deleteSession(sessionId);
+              console.log(`🗑️ Duplicate session '${sessionId}' fully destroyed.`);
+            } catch (delErr) {
+              console.error(`Failed to delete duplicate session '${sessionId}':`, delErr);
+            }
+            // Keep status for 30 more seconds for frontend polling, then clean up
+            setTimeout(() => {
+              sessionStatuses.delete(sessionId);
+              killedSessions.delete(sessionId);
+            }, 30000);
+          }, 3000);
           return;
         }
         // Register this phone with this session as its rightful owner
@@ -166,6 +185,14 @@ const whatsapp = new Whatsapp({
   },
   onDisconnected: (sessionId) => {
     console.log(`[${sessionId}] Disconnected`);
+
+    // Clean up pending timeout if exists
+    const pendingTimer = pendingSessionTimeouts.get(sessionId);
+    if (pendingTimer) {
+      clearTimeout(pendingTimer);
+      pendingSessionTimeouts.delete(sessionId);
+    }
+
     // Clean up phone guard when a session disconnects
     for (const [phone, sid] of phoneToSessionGuard.entries()) {
       if (sid === sessionId) {
@@ -186,32 +213,30 @@ const whatsapp = new Whatsapp({
 
     // --- SUBSCRIPTION CHECK FOR AI REPLIES ---
     try {
-      const uidFromSession = msg.sessionId.split('_')[0]; // Format: uid_uuid
+      // SCALABILITY FIX: Read exact owner UID from database instead of guessing from sessionId string
+      const storedUid = await (whatsapp as any).adapter.readData(msg.sessionId, 'ownerUid');
+      const uidFromSession = storedUid || msg.sessionId.split('_')[0];
 
-      // 1. Check if it's an agency-managed bot (starts with agency_)
-      if (uidFromSession.startsWith('agency_')) {
+      // 1. Check if it's an agency-managed bot
+      if (uidFromSession.startsWith('agency') || uidFromSession === 'agent') {
         // Bypass for agency bots
       } else {
         // 2. Check user role and subscription for regular SaaS bots
         const userDoc = await getFirestore().collection('users').doc(uidFromSession).get();
         const userData = userDoc.data();
 
-        // Agency owners and platform admins bypass sub checks globally
-        if (userData?.role === 'agency' || userData?.role === 'admin' || userData?.owner === true) {
-          // Bypass...
-        } else {
+        if (userData?.role !== 'agency' && userData?.role !== 'admin' && userData?.owner !== true) {
           const sub = userData?.subscription;
           const isExpired = sub?.expiresAt ? (new Date() > sub.expiresAt.toDate()) : false;
 
           if (!sub || sub.status !== 'active' || isExpired) {
-            console.warn(`⚠️ [${msg.sessionId}] AI Reply blocked: Subscription ${sub?.status || 'missing'} (Expired: ${isExpired})`);
+            console.warn(`⚠️ [${msg.sessionId}] AI Reply blocked: Subscription missing or expired.`);
             return;
           }
         }
       }
     } catch (subErr) {
       console.error("AI Sub check failed:", subErr);
-      // Fail-open or close? Let's stay active for small glitches, but log it.
     }
 
     // 2. Ignore messages sent by us (to prevent infinite loops) or messages without text
@@ -284,7 +309,7 @@ const whatsapp = new Whatsapp({
       (whatsapp as any).adapter.readData(msg.sessionId, 'businessInfo')
     ]);
 
-    const aiResponse = await generateAutoReply(text, !!isOwner, instructions, businessInfo);
+    const aiResponse = await generateAutoReply(text, !!isOwner, instructions, businessInfo, msg.sessionId, remoteJid);
 
     // 6. Send reply if AI responded
     if (aiResponse) {
@@ -372,9 +397,26 @@ app.post("/session/start", checkSubscription, async (req, res) => {
       }
     });
 
+    // --- AUTO-CLEANUP PENDING SESSIONS ---
+    const existingTimer = pendingSessionTimeouts.get(sessionId);
+    if (existingTimer) clearTimeout(existingTimer);
+
+    const timer = setTimeout(async () => {
+      const s = await whatsapp.getSessionById(sessionId);
+      if (s && s.status !== 'connected') {
+        console.log(`⏰ Auto-cleaning unattended session '${sessionId}' to save RAM (no scan in 3 mins).`);
+        await whatsapp.deleteSession(sessionId);
+        sessionStatuses.delete(sessionId);
+      }
+      pendingSessionTimeouts.delete(sessionId);
+    }, 3 * 60 * 1000); // 3 minutes timeout
+    pendingSessionTimeouts.set(sessionId, timer);
+    // -------------------------------------
+
     // Save custom AI personality data
     if (instructions) await (whatsapp as any).adapter.writeData(sessionId, 'instructions', 'config', instructions);
     if (businessInfo) await (whatsapp as any).adapter.writeData(sessionId, 'businessInfo', 'config', businessInfo);
+    if (uid) await (whatsapp as any).adapter.writeData(sessionId, 'ownerUid', 'config', uid);
     res.json({
       message: `Session ${sessionId} started.`,
       instruction: "Please scan the QR code displayed on the page."
@@ -420,14 +462,32 @@ app.post("/session/start-pairing", checkSubscription, async (req, res) => {
     await whatsapp.startSessionWithPairingCode(sessionId, {
       phoneNumber: phoneNumber,
       onPairingCode: (code) => {
+        console.log(`🔑 [${sessionId}] Received pairing code from Baileys: ${code}`);
         sessionStatuses.set(sessionId, { status: 'pairing_code', pairingCode: code });
       }
     });
+
+    // --- AUTO-CLEANUP PENDING SESSIONS ---
+    const existingTimer = pendingSessionTimeouts.get(sessionId);
+    if (existingTimer) clearTimeout(existingTimer);
+
+    const timer = setTimeout(async () => {
+      const s = await whatsapp.getSessionById(sessionId);
+      if (s && s.status !== 'connected') {
+        console.log(`⏰ Auto-cleaning unattended session '${sessionId}' to save RAM (no pairing code used in 3 mins).`);
+        await whatsapp.deleteSession(sessionId);
+        sessionStatuses.delete(sessionId);
+      }
+      pendingSessionTimeouts.delete(sessionId);
+    }, 3 * 60 * 1000); // 3 minutes timeout
+    pendingSessionTimeouts.set(sessionId, timer);
+    // -------------------------------------
 
     // Save custom AI personality data
     if (instructions) await (whatsapp as any).adapter.writeData(sessionId, 'instructions', 'config', instructions);
     if (businessInfo) await (whatsapp as any).adapter.writeData(sessionId, 'businessInfo', 'config', businessInfo);
     if (ownerNumber) await (whatsapp as any).adapter.writeData(sessionId, 'ownerNumber', 'config', ownerNumber);
+    if (uid) await (whatsapp as any).adapter.writeData(sessionId, 'ownerUid', 'config', uid);
 
     res.json({
       message: `Pairing code request initiated for ${phoneNumber}.`,

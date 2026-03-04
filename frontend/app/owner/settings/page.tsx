@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
     User,
     Settings as SettingsIcon,
@@ -20,10 +20,14 @@ import {
     Info,
     Shield,
     Smartphone,
-    Download
+    Download,
+    Youtube,
+    Loader2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme } from "@/lib/ThemeContext";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 type Tab = "profile" | "saas" | "appearance" | "security" | "notifications";
 
@@ -31,6 +35,60 @@ export default function SettingsPage() {
     const [activeTab, setActiveTab] = useState<Tab>("profile");
     const { theme, toggleTheme } = useTheme();
     const [showPassword, setShowPassword] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [saved, setSaved] = useState(false);
+
+    // SaaS Config fields
+    const [appName, setAppName] = useState("BulkReply.io");
+    const [supportEmail, setSupportEmail] = useState("");
+    const [helplinePhone, setHelplinePhone] = useState("");
+    const [onboardingVideoUrl, setOnboardingVideoUrl] = useState("");
+
+    // Load config from Firestore
+    useEffect(() => {
+        const loadConfig = async () => {
+            try {
+                const [generalSnap, onboardingSnap] = await Promise.all([
+                    getDoc(doc(db, "platform_config", "general")),
+                    getDoc(doc(db, "platform_config", "onboarding"))
+                ]);
+                if (generalSnap.exists()) {
+                    const d = generalSnap.data();
+                    setAppName(d.appName || "BulkReply.io");
+                    setSupportEmail(d.supportEmail || "");
+                    setHelplinePhone(d.helplinePhone || "");
+                }
+                if (onboardingSnap.exists()) {
+                    setOnboardingVideoUrl(onboardingSnap.data().videoUrl || "");
+                }
+            } catch (err) {
+                console.error("Failed to load config:", err);
+            }
+        };
+        loadConfig();
+    }, []);
+
+    // Save config
+    const handleSave = async () => {
+        setSaving(true);
+        try {
+            await Promise.all([
+                setDoc(doc(db, "platform_config", "general"), {
+                    appName, supportEmail, helplinePhone, updatedAt: serverTimestamp()
+                }, { merge: true }),
+                setDoc(doc(db, "platform_config", "onboarding"), {
+                    videoUrl: onboardingVideoUrl, updatedAt: serverTimestamp()
+                }, { merge: true })
+            ]);
+            setSaved(true);
+            setTimeout(() => setSaved(false), 2000);
+        } catch (err) {
+            console.error("Save failed:", err);
+            alert("Save failed. Check console.");
+        } finally {
+            setSaving(false);
+        }
+    };
 
     const tabs = [
         { id: "profile", name: "My Profile", icon: User },
@@ -47,9 +105,13 @@ export default function SettingsPage() {
                     <h1 className="text-2xl font-black text-slate-900 tracking-tight font-outfit text-indigo-900">Platform Settings</h1>
                     <p className="text-sm text-slate-500 font-medium">Global configuration and account management.</p>
                 </div>
-                <button className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center gap-2 active:scale-95">
-                    <Save size={18} />
-                    Save Changes
+                <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 flex items-center gap-2 active:scale-95 disabled:opacity-50"
+                >
+                    {saving ? <Loader2 size={18} className="animate-spin" /> : saved ? <Check size={18} /> : <Save size={18} />}
+                    {saving ? "Saving..." : saved ? "Saved!" : "Save Changes"}
                 </button>
             </div>
 
@@ -61,8 +123,8 @@ export default function SettingsPage() {
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id as Tab)}
                             className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all ${activeTab === tab.id
-                                    ? "bg-white text-indigo-600 shadow-sm border border-slate-100"
-                                    : "text-slate-500 hover:bg-slate-50"
+                                ? "bg-white text-indigo-600 shadow-sm border border-slate-100"
+                                : "text-slate-500 hover:bg-slate-50"
                                 }`}
                         >
                             <tab.icon size={18} className={activeTab === tab.id ? "text-indigo-600" : "text-slate-400"} />
@@ -147,15 +209,29 @@ export default function SettingsPage() {
                                     <div className="space-y-6">
                                         <div className="space-y-2">
                                             <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">SaaS Application Name</label>
-                                            <input type="text" defaultValue="BulkReply.io" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-black text-indigo-900 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all" />
+                                            <input type="text" value={appName} onChange={e => setAppName(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-black text-indigo-900 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all" />
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Support / Contact Email</label>
-                                            <input type="email" defaultValue="support@bulkreply.io" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all" />
+                                            <input type="email" value={supportEmail} onChange={e => setSupportEmail(e.target.value)} placeholder="support@bulkreply.io" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all" />
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Helpline Phone</label>
-                                            <input type="text" defaultValue="+91 1234567890" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all" />
+                                            <input type="text" value={helplinePhone} onChange={e => setHelplinePhone(e.target.value)} placeholder="+91 1234567890" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all" />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
+                                                <Youtube size={14} className="text-red-500" />
+                                                Onboarding Tutorial Video URL
+                                            </label>
+                                            <input
+                                                type="url"
+                                                value={onboardingVideoUrl}
+                                                onChange={e => setOnboardingVideoUrl(e.target.value)}
+                                                placeholder="https://www.youtube.com/watch?v=..."
+                                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm font-bold focus:outline-none focus:ring-4 focus:ring-red-500/10 focus:border-red-500 transition-all"
+                                            />
+                                            <p className="text-[10px] text-slate-400 font-medium ml-1">This video will be shown to new users during onboarding (Step 6).</p>
                                         </div>
                                     </div>
                                     <div className="space-y-6">

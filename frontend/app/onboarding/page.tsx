@@ -1,10 +1,9 @@
 "use client";
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect } from "react";
 import { useAuth } from "@/components/AuthProvider";
-import { doc, setDoc, updateDoc, arrayUnion, serverTimestamp } from "firebase/firestore";
+import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Building2, MapPin, Phone, Briefcase, Users, Rocket, Lightbulb, ClipboardList, QrCode, ArrowRight, ArrowLeft, Check, ChevronRight, Smartphone, SkipForward } from "lucide-react";
-import QRCode from "react-qr-code";
+import { Building2, MapPin, Phone, Briefcase, Users, Rocket, Lightbulb, ClipboardList, ArrowRight, ArrowLeft, Check, Play, SkipForward } from "lucide-react";
 
 // ─── Step Data ────────────────────────────────────────────────────────────────
 const INDUSTRIES = [
@@ -66,6 +65,19 @@ const welcomeSlides = [
     }
 ];
 
+// Default fallback video
+const DEFAULT_VIDEO_URL = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
+
+// Helper: convert YouTube URL to embed URL
+function toEmbedUrl(url: string): string {
+    try {
+        if (url.includes("embed/")) return url;
+        const match = url.match(/(?:v=|\/)([\w-]{11})/);
+        if (match) return `https://www.youtube.com/embed/${match[1]}?rel=0&modestbranding=1`;
+    } catch { }
+    return `https://www.youtube.com/embed/dQw4w9WgXcQ?rel=0`;
+}
+
 // ─── Main Component ──────────────────────────────────────────────────────────
 export default function OnboardingPage() {
     const { user, userData } = useAuth();
@@ -81,10 +93,8 @@ export default function OnboardingPage() {
     const [country, setCountry] = useState("IN");
     const [location, setLocation] = useState("");
 
-    // First bot
-    const [qrCode, setQrCode] = useState("");
-    const [botStatus, setBotStatus] = useState("");
-    const [isPolling, setIsPolling] = useState(false);
+    // Video URL from owner config
+    const [videoUrl, setVideoUrl] = useState(DEFAULT_VIDEO_URL);
 
     // Pre-fill from existing data
     useEffect(() => {
@@ -105,10 +115,25 @@ export default function OnboardingPage() {
         }
     }, [userData]);
 
-    const totalSteps = 6; // 2 form + 3 welcome + 1 bot
+    // Fetch onboarding video URL from owner config
+    useEffect(() => {
+        const fetchConfig = async () => {
+            try {
+                const snap = await getDoc(doc(db, "platform_config", "onboarding"));
+                if (snap.exists() && snap.data().videoUrl) {
+                    setVideoUrl(snap.data().videoUrl);
+                }
+            } catch (err) {
+                console.error("Failed to fetch onboarding config:", err);
+            }
+        };
+        fetchConfig();
+    }, []);
+
+    const totalSteps = 6; // 2 form + 3 welcome + 1 video
 
     // ── Save onboarding data ─────────────────────────────────────────────────
-    const saveAndComplete = async (skipBot = false) => {
+    const saveAndComplete = async () => {
         if (!user) return;
         setSaving(true);
         try {
@@ -124,67 +149,6 @@ export default function OnboardingPage() {
             setSaving(false);
         }
     };
-
-    // ── Start first bot ──────────────────────────────────────────────────────
-    const startFirstBot = useCallback(async () => {
-        if (!user) return;
-        const sessionId = `${user.uid}_bot-1`;
-        setBotStatus("Starting your first bot...");
-        setQrCode("");
-
-        try {
-            const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
-            const res = await fetch(`${baseUrl}/session/start`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ sessionId, uid: user.uid })
-            });
-            const data = await res.json();
-            setBotStatus(data.message || data.error);
-            if (data.message?.includes("started")) {
-                setIsPolling(true);
-            }
-        } catch {
-            setBotStatus("Failed to start bot. You can set it up later from the dashboard.");
-        }
-    }, [user]);
-
-    // Poll for QR
-    useEffect(() => {
-        if (!isPolling || !user) return;
-        const sessionId = `${user.uid}_bot-1`;
-        const interval = setInterval(async () => {
-            try {
-                const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
-                const res = await fetch(`${baseUrl}/session/status/${sessionId}`);
-                const data = await res.json();
-                if (data.qr) {
-                    setQrCode(data.qr);
-                    setBotStatus("Scan this QR code with WhatsApp");
-                }
-                if (data.status === "connected") {
-                    setBotStatus("✅ Bot connected! Redirecting...");
-                    setQrCode("");
-                    setIsPolling(false);
-                    // Track session in Firestore
-                    await updateDoc(doc(db, "users", user.uid), { sessions: arrayUnion(sessionId) });
-                    setTimeout(() => saveAndComplete(), 1500);
-                }
-            } catch { }
-        }, 2000);
-        return () => clearInterval(interval);
-    }, [isPolling, user]);
-
-    // Auto-start bot early when reaching the last welcome slide (step 4)
-    // so it's ready by the time they click next to step 5.
-    useEffect(() => {
-        if ((step === 4 || step === 5) && !qrCode && !isPolling) {
-            if (botStatus.includes("Starting") || botStatus.includes("connected") || botStatus.includes("active") || botStatus.includes("Redirecting")) {
-                return;
-            }
-            startFirstBot();
-        }
-    }, [step, qrCode, isPolling, startFirstBot, botStatus]);
 
     // ── Validation ───────────────────────────────────────────────────────────
     const canProceed = () => {
@@ -354,32 +318,24 @@ export default function OnboardingPage() {
                         );
                     })()}
 
-                    {/* ── Step 5: First Bot Setup ── */}
+                    {/* ── Step 5: Watch Tutorial Video ── */}
                     {step === 5 && (
                         <div className="p-8 text-center">
-                            <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-blue-100 to-indigo-100 mx-auto flex items-center justify-center mb-5">
-                                <Smartphone className="w-7 h-7 text-blue-600" />
+                            <div className="w-16 h-16 rounded-3xl bg-gradient-to-br from-red-100 to-red-200 mx-auto flex items-center justify-center mb-5">
+                                <Play className="w-7 h-7 text-red-600" />
                             </div>
-                            <h2 className="text-xl font-bold text-slate-900 mb-1">My First Bot</h2>
-                            <p className="text-sm text-slate-500 mb-6">Connect your WhatsApp to get started instantly</p>
+                            <h2 className="text-xl font-bold text-slate-900 mb-1">Watch Quick Tutorial</h2>
+                            <p className="text-sm text-slate-500 mb-6">Learn how to use BulkReply.io in just a few minutes</p>
 
-                            {qrCode ? (
-                                <div className="space-y-4">
-                                    <div className="bg-white p-3 rounded-2xl border-2 border-blue-100 shadow-sm inline-block mx-auto">
-                                        <QRCode value={qrCode} size={200} style={{ height: "auto", maxWidth: "100%", width: "100%" }} />
-                                    </div>
-                                    <div className="max-w-xs mx-auto space-y-2 text-left">
-                                        <p className="text-xs text-slate-500 flex items-start gap-2"><span className="font-bold text-blue-600">1.</span> Open WhatsApp on your phone</p>
-                                        <p className="text-xs text-slate-500 flex items-start gap-2"><span className="font-bold text-blue-600">2.</span> Go to Settings → Linked Devices</p>
-                                        <p className="text-xs text-slate-500 flex items-start gap-2"><span className="font-bold text-blue-600">3.</span> Tap "Link a Device" and scan this QR</p>
-                                    </div>
-                                </div>
-                            ) : (
-                                <div className="p-6 bg-slate-50 rounded-2xl border border-slate-200">
-                                    <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-                                    <p className="text-sm text-slate-600">{botStatus || "Preparing..."}</p>
-                                </div>
-                            )}
+                            <div className="rounded-2xl overflow-hidden border-2 border-slate-100 shadow-sm bg-black aspect-video">
+                                <iframe
+                                    src={toEmbedUrl(videoUrl)}
+                                    title="BulkReply.io Tutorial"
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                    allowFullScreen
+                                    className="w-full h-full"
+                                />
+                            </div>
                         </div>
                     )}
 
@@ -394,7 +350,7 @@ export default function OnboardingPage() {
 
                         <div className="flex items-center gap-3">
                             {step === 5 && (
-                                <button onClick={() => saveAndComplete(true)} disabled={saving}
+                                <button onClick={() => saveAndComplete()} disabled={saving}
                                     className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-50">
                                     <SkipForward className="w-4 h-4" /> Skip
                                 </button>

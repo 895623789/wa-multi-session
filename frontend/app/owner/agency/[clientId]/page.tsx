@@ -241,29 +241,52 @@ export default function ClientManagement() {
                 body: JSON.stringify(body)
             });
 
+            const data = await res.json();
+
+            if (data.message?.includes('already active')) {
+                setViewState('list');
+                setIsGenerating(false);
+                fetchBackendSessions();
+                return;
+            }
+
             if (res.ok) {
+                let pollCount = 0;
+                const maxPolls = 20; // 60 seconds (20 * 3000ms)
+
                 // Polling logic for QR / Pairing Code / Status
                 const pollInterval = setInterval(async () => {
+                    pollCount++;
                     try {
                         const sRes = await fetch(`${baseUrl}/session/status/${agentId}`);
                         if (sRes.ok) {
                             const sData = await sRes.json();
+
                             if (sData.qr) setQrCode(sData.qr);
+
                             if (sData.pairingCode) {
+                                console.log("Frontend received code:", sData.pairingCode);
                                 setPairingCode(sData.pairingCode);
                                 setIsGenerating(false);
                             }
+
                             if (sData.status === 'connected') {
                                 clearInterval(pollInterval);
                                 setViewState('list');
                                 setIsGenerating(false);
                                 fetchBackendSessions();
                             }
-                            if (sData.status === 'disconnected' || sData.status === 'duplicate_rejected') {
+
+                            if (sData.status === 'duplicate_rejected') { // Removed 'disconnected' check
                                 setIsGenerating(false);
                                 clearInterval(pollInterval);
-                                // don't close the modal immediately, let the user see it failed, or close it?
-                                // actually, we can leave it.
+                            }
+
+                            // Timeout if no code generated
+                            if (pollCount > maxPolls && !sData.pairingCode && type === 'pairing') {
+                                clearInterval(pollInterval);
+                                setIsGenerating(false);
+                                alert("Taking too long to generate code. Please try again or use QR code.");
                             }
                         }
                     } catch (e) { }
@@ -288,7 +311,7 @@ export default function ClientManagement() {
         if (!confirm("Disconnect this WhatsApp session?")) return;
         try {
             const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
-            await fetch(`${baseUrl}/session/delete?uid=agency_${clientId}&sessionId=${agentId}`, { method: "DELETE" });
+            await fetch(`${baseUrl}/session/delete/${agentId}?uid=agency_${clientId}`, { method: "DELETE" });
             fetchBackendSessions();
         } catch (e) { }
     };

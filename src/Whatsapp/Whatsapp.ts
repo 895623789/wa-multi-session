@@ -344,17 +344,20 @@ export class Whatsapp {
               isPairingCodeRequested = true; // Prevents race conditions / multiple requests
 
               // Add delay to ensure connection is stable before requesting code
-              await createDelay(2000);
+              await createDelay(3000);
 
               try {
+                console.log(`📡 [${sessionId}] Requesting Pairing Code for ${options.phoneNumber}...`);
                 const code = await sock.requestPairingCode(options.phoneNumber);
+                console.log(`✅ [${sessionId}] Pairing Code generated: ${code}`);
+
                 this.callback.get(CALLBACK_KEY.ON_PAIRING_CODE)?.(
                   sessionId,
                   code
                 );
                 options.onPairingCode?.(code);
-              } catch (error) {
-                console.log("Error Requesting Pairing Code", error);
+              } catch (error: any) {
+                console.error(`❌ [${sessionId}] Error Requesting Pairing Code:`, error.message || error);
                 isPairingCodeRequested = false; // Reset flag to allow retry on error
               }
             }

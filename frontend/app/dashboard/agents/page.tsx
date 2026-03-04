@@ -1,5 +1,7 @@
 "use client";
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { collection, doc, setDoc, deleteDoc, onSnapshot, updateDoc, arrayUnion, arrayRemove, getDoc } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import {
     Bot, User, MessageSquare, Settings, Save, Plus, Trash2, Sparkles,
     ShieldCheck, ChevronRight, ChevronLeft, Wand2, Briefcase, PhoneCall,
@@ -10,8 +12,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import QRCode from "react-qr-code";
 import { useAuth } from "@/components/AuthProvider";
-import { doc, updateDoc, arrayUnion, arrayRemove, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import { useSubscription } from "@/lib/useSubscription";
 
 // ─── Interfaces ─────────────────────────────────────────────────────────────
@@ -96,6 +96,12 @@ export default function UnifiedAgentsPage() {
         agent: null
     });
 
+    // Duplicate Number Modal State
+    const [duplicateModal, setDuplicateModal] = useState<{ isOpen: boolean, lang: 'en' | 'hi' }>({
+        isOpen: false,
+        lang: 'en'
+    });
+
     // Toasts
     const [toastMsg, setToastMsg] = useState<{ title: string, msg: string, type: 'success' | 'error' } | null>(null);
 
@@ -119,44 +125,74 @@ export default function UnifiedAgentsPage() {
         }
     }, [uid]);
 
-    const loadLocalAgents = useCallback(() => {
-        const savedAgents = localStorage.getItem(`bulkreply_agents_${uid}`);
-        if (savedAgents) {
-            try { setAgents(JSON.parse(savedAgents)); } catch (e) { }
-        }
-    }, [uid]);
-
+    // Real-time Firestore listener for agents + one-time localStorage migration
     useEffect(() => {
-        if (uid) {
-            loadLocalAgents();
-            fetchBackendSessions().then(() => setLoading(false));
+        if (!uid) return;
+        fetchBackendSessions().then(() => setLoading(false));
+
+        const unsub = onSnapshot(
+            collection(db, "users", uid, "agents"),
+            async (snapshot) => {
+                const list: AgentConfig[] = [];
+                snapshot.forEach((d) => {
+                    list.push({ id: d.id, ...d.data() } as AgentConfig);
+                });
+
+                // ── One-time migration: localStorage → Firestore ──
+                if (list.length === 0) {
+                    const localKey = `bulkreply_agents_${uid}`;
+                    const localData = localStorage.getItem(localKey);
+                    if (localData) {
+                        try {
+                            const localAgents: AgentConfig[] = JSON.parse(localData);
+                            if (localAgents.length > 0) {
+                                console.log(`🔄 Migrating ${localAgents.length} agents from localStorage to Firestore...`);
+                                for (const agent of localAgents) {
+                                    const { id, ...data } = agent;
+                                    await setDoc(doc(db, "users", uid, "agents", id), data, { merge: true });
+                                }
+                                localStorage.removeItem(localKey); // Clear after migration
+                                console.log("✅ Migration complete!");
+                                return; // onSnapshot will fire again with new data
+                            }
+                        } catch (e) {
+                            console.error("Migration parse error:", e);
+                        }
+                    }
+                }
+
+                setAgents(list);
+                setLoading(false);
+            },
+            (err) => console.error("Agents listener error:", err)
+        );
+        return () => unsub();
+    }, [uid, fetchBackendSessions]);
+
+    const saveAgentToFirestore = async (finalAgent: AgentConfig) => {
+        if (!uid) return;
+        try {
+            const { id, ...data } = finalAgent;
+            await setDoc(doc(db, "users", uid, "agents", id), data, { merge: true });
+        } catch (err) {
+            console.error("Failed to save agent:", err);
         }
-    }, [uid, fetchBackendSessions, loadLocalAgents]);
-
-    const saveAgentLocally = (finalAgent: AgentConfig) => {
-        const updated = [...agents];
-        const idx = updated.findIndex(a => a.id === finalAgent.id);
-        if (idx >= 0) updated[idx] = finalAgent;
-        else updated.push(finalAgent);
-
-        setAgents(updated);
-        localStorage.setItem(`bulkreply_agents_${uid}`, JSON.stringify(updated));
     };
 
     const deleteAgentAction = async (agentId: string) => {
-        // Remove locally
-        const updated = agents.filter(a => a.id !== agentId);
-        setAgents(updated);
-        localStorage.setItem(`bulkreply_agents_${uid}`, JSON.stringify(updated));
+        // Remove from Firestore
+        try {
+            if (uid) {
+                await deleteDoc(doc(db, "users", uid, "agents", agentId));
+            }
+        } catch (err) {
+            console.error("Firestore delete error:", err);
+        }
 
         // Attempt Backend Disconnect
         try {
             const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
             await fetch(`${baseUrl}/session/delete/${agentId}?uid=${uid}`, { method: "DELETE" });
-
-            // Note: In a real app, you'd perform Firebase removal here if needed
-            // await updateDoc(doc(db, "users", uid), { sessions: arrayRemove(agentId) });
-
             await fetchBackendSessions();
             showToast("Agent Deleted", "Recruitment terminated successfully.", "success");
         } catch (e) {
@@ -232,7 +268,7 @@ export default function UnifiedAgentsPage() {
                 isActive: true,
                 updatedAt: Date.now()
             };
-            saveAgentLocally(newAgent);
+            saveAgentToFirestore(newAgent);
             showToast("Hired Successfully!", `${newAgent.name} is now active in your pipeline.`, "success");
         } else {
             showToast("Refreshed!", "Session re-linked successfully.", "success");
@@ -256,9 +292,9 @@ export default function UnifiedAgentsPage() {
                     handleConnectionSuccess(activeFullSessionId);
                 }
                 if (statusData.status === 'duplicate_rejected') {
-                    setConnectionStatus("ERROR: Number already linked to another bot.");
                     setQrCode("");
                     setIsPolling(false);
+                    setDuplicateModal({ isOpen: true, lang: 'en' });
                 }
             } catch (e) { }
         }, 2000);
@@ -290,7 +326,7 @@ export default function UnifiedAgentsPage() {
         if (!editingAgentId) return;
         const existing = agents.find(a => a.id === editingAgentId);
         if (existing) {
-            saveAgentLocally({ ...existing, ...draftAgent as any, updatedAt: Date.now() });
+            saveAgentToFirestore({ ...existing, ...draftAgent as any, updatedAt: Date.now() });
             showToast("Configuration Saved", "Agent mental model updated.", "success");
         }
         resetWizard();
@@ -344,8 +380,8 @@ export default function UnifiedAgentsPage() {
                                 }}
                                 disabled={isExpired || connectedSessions.length >= (subscription?.maxSessions || 1)}
                                 className={`px-8 py-3.5 rounded-2xl font-black flex items-center gap-2 transition-all shadow-xl hover:-translate-y-1 active:scale-95 ${(isExpired || connectedSessions.length >= (subscription?.maxSessions || 1))
-                                        ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
-                                        : 'bg-primary text-white shadow-primary/25 hover:bg-indigo-600'
+                                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                                    : 'bg-primary text-white shadow-primary/25 hover:bg-indigo-600'
                                     }`}
                             >
                                 <Plus className="w-5 h-5" /> Hire New Agent
@@ -453,7 +489,7 @@ export default function UnifiedAgentsPage() {
                                                 type="checkbox" className="sr-only peer" checked={agent.isActive}
                                                 onChange={() => {
                                                     const updated = { ...agent, isActive: !agent.isActive };
-                                                    saveAgentLocally(updated);
+                                                    saveAgentToFirestore(updated);
                                                     showToast(updated.isActive ? "Logic Resumed" : "Logic Paused", `${agent.name} is now ${updated.isActive ? 'active' : 'idle'}.`, "success");
                                                 }}
                                             />
@@ -696,7 +732,7 @@ export default function UnifiedAgentsPage() {
                                 <>
                                     <button
                                         onClick={editingAgentId ? handleEditSave : () => {
-                                            saveAgentLocally({
+                                            saveAgentToFirestore({
                                                 id: `draft-${Date.now()}`, name: draftAgent.name!, role: draftAgent.role!, gender: draftAgent.gender!, age: draftAgent.age!,
                                                 businessInfo: draftAgent.businessInfo!, instructions: draftAgent.instructions!, ownerNumbers: draftAgent.ownerNumbers!,
                                                 replyDelay: 2, autoGreet: draftAgent.autoGreet!, isActive: true, updatedAt: Date.now()
@@ -909,6 +945,95 @@ export default function UnifiedAgentsPage() {
                             </button>
                         </motion.div>
                     </div>
+                )}
+            </AnimatePresence>
+
+            {/* ─── Duplicate Number Popup Modal ─── */}
+            <AnimatePresence>
+                {duplicateModal.isOpen && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+                        onClick={() => { setDuplicateModal({ isOpen: false, lang: 'en' }); resetWizard(); }}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.85, opacity: 0, y: 30 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.85, opacity: 0, y: 30 }}
+                            transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-100 dark:border-slate-700"
+                        >
+                            {/* Header */}
+                            <div className="bg-gradient-to-r from-rose-500 to-orange-500 px-6 py-5 flex items-center gap-3">
+                                <div className="bg-white/20 rounded-xl p-2">
+                                    <AlertTriangle className="w-6 h-6 text-white" />
+                                </div>
+                                <div>
+                                    <h3 className="text-white font-black text-lg tracking-tight">
+                                        {duplicateModal.lang === 'en' ? 'Number Already Linked!' : 'नंबर पहले से जुड़ा है!'}
+                                    </h3>
+                                    <p className="text-white/70 text-xs font-medium">
+                                        {duplicateModal.lang === 'en' ? 'Duplicate WhatsApp detected' : 'Duplicate WhatsApp पकड़ा गया'}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Body */}
+                            <div className="px-6 py-5 space-y-4">
+                                {duplicateModal.lang === 'en' ? (
+                                    <ul className="space-y-3 text-sm text-slate-700 dark:text-slate-300">
+                                        <li className="flex gap-3 items-start">
+                                            <span className="bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shrink-0 mt-0.5">1</span>
+                                            <span><strong>What happened:</strong> The WhatsApp number you just scanned is already connected to another agent in your account.</span>
+                                        </li>
+                                        <li className="flex gap-3 items-start">
+                                            <span className="bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shrink-0 mt-0.5">2</span>
+                                            <span><strong>Rule:</strong> One WhatsApp number can only be linked to one agent at a time.</span>
+                                        </li>
+                                        <li className="flex gap-3 items-start">
+                                            <span className="bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shrink-0 mt-0.5">3</span>
+                                            <span><strong>What to do:</strong> Either <u>delete the existing agent</u> that uses this number, or <u>use a different WhatsApp number</u> for the new agent.</span>
+                                        </li>
+                                    </ul>
+                                ) : (
+                                    <ul className="space-y-3 text-sm text-slate-700 dark:text-slate-300">
+                                        <li className="flex gap-3 items-start">
+                                            <span className="bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shrink-0 mt-0.5">1</span>
+                                            <span><strong>क्या हुआ:</strong> जो WhatsApp नंबर आपने अभी स्कैन किया, वो पहले से आपके दूसरे agent में जुड़ा हुआ है।</span>
+                                        </li>
+                                        <li className="flex gap-3 items-start">
+                                            <span className="bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shrink-0 mt-0.5">2</span>
+                                            <span><strong>नियम:</strong> एक WhatsApp नंबर = सिर्फ एक agent। एक नंबर दो agent में नहीं चल सकता।</span>
+                                        </li>
+                                        <li className="flex gap-3 items-start">
+                                            <span className="bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shrink-0 mt-0.5">3</span>
+                                            <span><strong>क्या करें:</strong> पहले <u>पुराना agent delete करें</u> जो इस नंबर से जुड़ा है, या <u>दूसरा WhatsApp नंबर</u> इस्तेमाल करें।</span>
+                                        </li>
+                                    </ul>
+                                )}
+                            </div>
+
+                            {/* Footer */}
+                            <div className="px-6 py-4 bg-slate-50 dark:bg-slate-900/50 flex items-center justify-between border-t border-slate-100 dark:border-slate-700">
+                                <button
+                                    onClick={() => setDuplicateModal(prev => ({ ...prev, lang: prev.lang === 'en' ? 'hi' : 'en' }))}
+                                    className="flex items-center gap-2 text-xs font-bold text-primary hover:underline underline-offset-4 transition-all"
+                                >
+                                    <Languages className="w-4 h-4" />
+                                    {duplicateModal.lang === 'en' ? 'हिंदी में देखें' : 'View in English'}
+                                </button>
+                                <button
+                                    onClick={() => { setDuplicateModal({ isOpen: false, lang: 'en' }); resetWizard(); }}
+                                    className="bg-gradient-to-r from-rose-500 to-orange-500 text-white px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest hover:shadow-lg hover:shadow-rose-500/20 transition-all"
+                                >
+                                    Got It
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
                 )}
             </AnimatePresence>
         </div>

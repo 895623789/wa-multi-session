@@ -45,10 +45,13 @@ export default function DashboardHome() {
         <div className="w-full h-full relative z-10 p-4 lg:p-8">
             <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
                 <div>
-                    <p className="text-primary text-sm font-medium mb-1 flex items-center gap-1">
-                        <ShieldCheck className="w-4 h-4" /> System secured
-                    </p>
                     <h2 className="text-3xl font-bold text-slate-900 dark:text-white font-outfit">Dashboard</h2>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                        {sessions.length > 0
+                            ? `${sessions.length} WhatsApp device${sessions.length > 1 ? 's' : ''} connected`
+                            : "Connect your WhatsApp to start using AI auto-replies"
+                        }
+                    </p>
                 </div>
                 <div className="flex items-center space-x-4 self-end md:self-auto">
                     <button className="p-2 text-slate-400 hover:text-primary transition-colors dark:text-slate-500 dark:hover:text-white">
@@ -58,12 +61,6 @@ export default function DashboardHome() {
                         <Bell className="w-6 h-6" />
                         <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border border-white dark:border-slate-800"></span>
                     </button>
-                    <div className="flex items-center space-x-3 pl-2">
-                        <div className="w-10 h-10 rounded-full bg-slate-200 border-2 border-white dark:border-slate-700 shadow-sm flex items-center justify-center">
-                            <span className="text-sm font-bold text-slate-600">JD</span>
-                        </div>
-                        <span className="hidden md:block font-medium text-slate-800 dark:text-slate-100 text-sm">John Doe</span>
-                    </div>
                 </div>
             </header>
 
@@ -73,8 +70,8 @@ export default function DashboardHome() {
                     {/* Active Connections */}
                     <div className="rounded-2xl p-6 shadow-soft relative overflow-hidden glass">
                         <div className="flex justify-between items-center mb-6">
-                            <h3 className="text-slate-900 dark:text-white font-bold">Active Devices</h3>
-                            <Link href="/dashboard/agents" className="text-primary text-sm font-bold hover:underline">Manage agents</Link>
+                            <h3 className="text-slate-900 dark:text-white font-bold">Your WhatsApp Devices</h3>
+                            <Link href="/dashboard/agents" className="text-primary text-sm font-bold hover:underline">Manage</Link>
                         </div>
 
                         {loading ? (
@@ -82,12 +79,18 @@ export default function DashboardHome() {
                                 <RefreshCw className="w-6 h-6 animate-spin text-slate-400" />
                             </div>
                         ) : sessions.length === 0 ? (
-                            <div className="text-center py-8 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-700">
-                                <div className="inline-flex items-center justify-center space-x-2 bg-slate-100 dark:bg-slate-700/50 rounded-full px-4 py-1.5 mb-2">
-                                    <span className="text-xs font-semibold text-slate-600 dark:text-slate-300">Offline</span>
+                            <div className="text-center py-8 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-dashed border-slate-200 dark:border-slate-700">
+                                <div className="w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
+                                    <MessageSquare className="w-6 h-6 text-primary" />
                                 </div>
-                                <p className="text-slate-400 dark:text-slate-500 text-xs mt-1 mb-4">No active WhatsApp connections.</p>
-                                <Link href="/dashboard/agents" className="px-4 py-2 bg-primary text-white text-xs font-semibold rounded-full hover:bg-teal-700 transition">Connect Device</Link>
+                                <h4 className="text-sm font-bold text-slate-800 dark:text-white mb-1">No WhatsApp Connected Yet</h4>
+                                <p className="text-xs text-slate-400 dark:text-slate-500 mb-4 max-w-[220px] mx-auto">
+                                    Connect your WhatsApp number to enable AI auto-replies, campaigns & more.
+                                </p>
+                                <Link href="/dashboard/agents" className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-white text-xs font-bold rounded-full hover:bg-teal-700 transition shadow-lg shadow-primary/20">
+                                    <Zap className="w-3.5 h-3.5" />
+                                    Connect WhatsApp
+                                </Link>
                             </div>
                         ) : (
                             <div className="space-y-3">
