@@ -15,6 +15,7 @@ import {
     ChevronLeft,
     ChevronRight,
     X,
+    Trash2,
     FileText,
     Target,
     Zap,
@@ -104,7 +105,7 @@ export default function AnnouncementsPage() {
                             <div className="space-y-3 max-w-xl">
                                 <div className="flex items-center gap-3">
                                     <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black uppercase tracking-tighter border ${ann.status === 'Active' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                                            ann.status === 'Scheduled' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-slate-100 text-slate-400 border-slate-200'
+                                        ann.status === 'Scheduled' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' : 'bg-slate-100 text-slate-400 border-slate-200'
                                         }`}>
                                         {ann.status}
                                     </span>

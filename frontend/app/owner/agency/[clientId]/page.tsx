@@ -10,7 +10,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { db } from "@/lib/firebase";
 import { doc, getDoc, collection, query, onSnapshot, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore";
-import Filter from "bad-words";
+import { Filter } from "bad-words";
 import { useAuth } from "@/components/AuthProvider";
 import Link from "next/link";
 import QRCode from "react-qr-code";
@@ -40,6 +40,7 @@ interface AgentConfig {
     replyDelay: number;
     autoGreet: boolean;
     isActive: boolean;
+    botType?: string;
     updatedAt: number;
 }
 

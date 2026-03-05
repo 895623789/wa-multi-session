@@ -1279,7 +1279,7 @@ async function autoConnectActiveAgents() {
       const agentsSnap = await userDoc.ref.collection("agents").get();
       for (const agentDoc of agentsSnap.docs) {
         const agentId = agentDoc.id;
-        const agentData = { ...agentDoc.data(), ownerUid: userDoc.id };
+        const agentData = { ...agentDoc.data() as any, ownerUid: userDoc.id };
 
         // Skip deleted bots entirely
         if (agentData.deleted === true) {
@@ -1313,7 +1313,7 @@ async function autoConnectActiveAgents() {
       const data = doc.data();
       if (!data.agents || !Array.isArray(data.agents)) continue;
 
-      for (const agent of data.agents) {
+      for (const agent of data.agents as any[]) {
         const agentId = agent.id;
         if (!agentId) continue;
 
