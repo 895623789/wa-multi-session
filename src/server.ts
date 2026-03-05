@@ -448,12 +448,13 @@ Please summarize this for me and suggest a reply based on our business profile a
         // Cache for 5 minutes
         subCache.set(uidFromSession, { allowed, expiresAt: now + 5 * 60 * 1000 });
         if (!allowed) {
-          console.warn(`⚠️ [${msg.sessionId}] AI Reply blocked: Subscription or Agency Access missing/expired.`);
+          console.warn(`⚠️ [${msg.sessionId}] AI Reply blocked: Subscription missing/expired for UID [${uidFromSession}].`);
           return;
         }
       }
     } catch (subErr) {
-      console.error("AI Sub check failed:", subErr);
+      // Fail-open: if subscription check itself errors, allow the reply
+      console.error(`⚠️ [${msg.sessionId}] Sub check error (allowing reply):`, subErr);
     }
 
     // 2. Ignore messages sent by us (to prevent infinite loops) or messages without text/media
@@ -464,6 +465,7 @@ Please summarize this for me and suggest a reply based on our business profile a
 
     // --- REAL-TIME STATUS CHECK (ON/OFF Logic) ---
     const isActiveStr = await (whatsapp as any).adapter.readData(msg.sessionId, 'isActive', 'config');
+    console.log(`🔍 [${msg.sessionId}] isActive=${isActiveStr}, botType=${botType}, ownerNumber=${ownerNumber || 'NOT SET'}`);
     if (isActiveStr === 'false') {
       console.log(`⏸️ [${msg.sessionId}] Logic is paused. Ignoring message.`);
       return;
@@ -535,7 +537,16 @@ Please summarize this for me and suggest a reply based on our business profile a
     }
     // --- END OWNER COMMANDS ---
 
-    // 4. Show typing status while AI "thinks"
+    // 4. Check if bot is Active (inactive = connected but no replies)
+    const isActiveSetting = await (whatsapp as any).adapter.readData(msg.sessionId, 'isActive');
+    // isActive defaults to true unless explicitly set to 'false'
+    const botIsActive = isActiveSetting !== 'false';
+    if (!botIsActive) {
+      console.log(`⏸️ [${msg.sessionId}] Bot is INACTIVE. Message from ${senderPhone} received but no reply sent.`);
+      return;
+    }
+
+    // 5. Show typing status while AI "thinks"
     console.log(`⏳ Sending typing indicator to ${remoteJid}...`);
     await whatsapp.sendTypingIndicator({
       sessionId: msg.sessionId,
@@ -756,6 +767,81 @@ app.post("/session/start", checkSubscription, async (req: any, res) => {
     }
     res.status(500).json({ error: error.message });
   }
+});
+
+/**
+ * 🗑️ Delete a Bot (Cascade)
+ * POST /bot/delete
+ * Body: { sessionId, clientId }
+ * - Stops WhatsApp session
+ * - Deletes Firestore auth/config data
+ * - Removes from agencyAgents agents array
+ */
+app.post("/bot/delete", async (req: any, res) => {
+  const { sessionId, clientId } = req.body;
+  if (!sessionId) return res.status(400).json({ error: "sessionId is required" });
+
+  const errors: string[] = [];
+  console.log(`🗑️ DELETE BOT requested: ${sessionId} (client: ${clientId})`);
+
+  // Step 1: Disconnect & remove Baileys session
+  try {
+    const existing = await whatsapp.getSessionById(sessionId);
+    if (existing) {
+      await whatsapp.deleteSession(sessionId);
+      sessionStatuses.delete(sessionId);
+      console.log(`✅ Baileys session deleted: ${sessionId}`);
+    }
+  } catch (err: any) {
+    errors.push(`Session stop error: ${err.message}`);
+    console.error(`⚠️ Could not stop session (may already be disconnected):`, err.message);
+  }
+
+  // Step 2: Delete Firestore auth/config data (wa_sessions, bot_config etc)
+  try {
+    const db = getFirestore();
+    const collections = ['wa_sessions', 'bot_config', 'wa_chats'];
+    for (const col of collections) {
+      const snap = await db.collection(col).where('sessionId', '==', sessionId).get();
+      const batch = db.batch();
+      snap.docs.forEach(d => batch.delete(d.ref));
+      if (!snap.empty) await batch.commit();
+    }
+    // Also delete the specific session doc
+    await db.collection('wa_sessions').doc(sessionId).delete().catch(() => { });
+    console.log(`✅ Firestore session data deleted for: ${sessionId}`);
+  } catch (err: any) {
+    errors.push(`Firestore cleanup error: ${err.message}`);
+    console.error("⚠️ Firestore cleanup error:", err.message);
+  }
+
+  // Step 3: Remove from agencyAgents agents array
+  if (clientId) {
+    try {
+      const db = getFirestore();
+      const agentDocRef = db.collection('agencyAgents').doc(clientId);
+      const agentDoc = await agentDocRef.get();
+      if (agentDoc.exists) {
+        const data = agentDoc.data();
+        const updatedAgents = (data?.agents || []).filter((a: any) => a.id !== sessionId);
+        await agentDocRef.update({ agents: updatedAgents });
+        console.log(`✅ Removed bot ${sessionId} from agencyAgents/${clientId}`);
+      }
+    } catch (err: any) {
+      errors.push(`Agency agents update error: ${err.message}`);
+      console.error("⚠️ Failed to remove from agencyAgents:", err.message);
+    }
+  }
+
+  if (errors.length > 0) {
+    return res.status(207).json({
+      message: `Bot deleted with ${errors.length} partial error(s).`,
+      errors,
+      sessionId
+    });
+  }
+
+  res.json({ message: `✅ Bot ${sessionId} deleted successfully.`, sessionId });
 });
 
 /**
@@ -1157,46 +1243,113 @@ app.post("/admin/upload-to-storage", upload.single('file'), async (req: any, res
 });
 
 
-// ─── AUTO-CONNECT ACTIVE SESSIONS ON BOOT ───────────────────────────────────
+// ─── AUTO-CONNECT ALL BOTS ON BOOT (Full State Restore) ─────────────────────
 async function autoConnectActiveAgents() {
-  console.log("🔄 Starting Auto-Connect for Active WhatsApp Sessions...");
+  console.log("🔄 Starting Full-State Auto-Connect for ALL WhatsApp Sessions...");
   const db = getFirestore();
   let connectCount = 0;
+  let skippedCount = 0;
+  let inactiveCount = 0;
+
+  // Helper: Write ALL config data for a bot from Firebase → Baileys adapter
+  const restoreBotConfig = async (agentId: string, agentData: Record<string, any>) => {
+    const fields: Record<string, string> = {
+      ownerNumber: agentData.ownerNumbers?.[0] || agentData.ownerNumber,
+      ownerUid: agentData.ownerUid || agentData.uid,
+      instructions: agentData.instructions,
+      businessInfo: agentData.businessInfo,
+      name: agentData.name,
+      role: agentData.role,
+      gender: agentData.gender,
+      age: agentData.age?.toString(),
+      botType: agentData.botType || 'saas',
+      isActive: agentData.isActive !== false ? 'true' : 'false',
+    };
+    for (const [key, value] of Object.entries(fields)) {
+      if (value !== undefined && value !== null) {
+        await (whatsapp as any).adapter.writeData(agentId, key, 'config', value).catch(() => { });
+      }
+    }
+  };
 
   try {
-    // 1. Reconnect Personal & Business Bots from 'users' collection
+    // ── 1. Personal & SaaS Bots from 'users/{uid}/agents' ──────────────────
     const usersSnap = await db.collection("users").get();
     for (const userDoc of usersSnap.docs) {
-      // Reconnect all agents that were previously linked
       const agentsSnap = await userDoc.ref.collection("agents").get();
       for (const agentDoc of agentsSnap.docs) {
         const agentId = agentDoc.id;
-        console.log(`🔌 Auto-connecting User Agent: ${agentId}`);
+        const agentData = { ...agentDoc.data(), ownerUid: userDoc.id };
+
+        // Skip deleted bots entirely
+        if (agentData.deleted === true) {
+          console.log(`🗑️ Skipping deleted SaaS bot: ${agentId}`);
+          skippedCount++;
+          continue;
+        }
+
+        // Restore full config from Firebase to memory
+        await restoreBotConfig(agentId, agentData);
+
+        const isActive = agentData.isActive !== false;
+        console.log(`🔌 Auto-connecting SaaS bot: ${agentId} [${isActive ? 'ACTIVE ✅' : 'INACTIVE (connected, no replies) ⏸️'}]`);
+
         whatsapp.startSession(agentId, { printQR: false }).catch(err => {
           console.error(`❌ Failed to auto-connect ${agentId}:`, err.message);
         });
+
+        if (!isActive) inactiveCount++;
         connectCount++;
+
+        // Stagger connections by 200ms each to avoid overloading on 100+ bots
+        await new Promise(resolve => setTimeout(resolve, 200));
       }
     }
 
-    // 2. Reconnect Agency Bots from 'agencyAgents' collection
+    // ── 2. Agency Bots from 'agencyAgents/{clientId}' ──────────────────────
     const agencyDocs = await db.collection("agencyAgents").get();
     for (const doc of agencyDocs.docs) {
+      const clientId = doc.id;
       const data = doc.data();
-      if (data.agents && Array.isArray(data.agents)) {
-        for (const agent of data.agents) {
-          if (agent.id) {
-            console.log(`🔌 Auto-connecting Agency Agent: ${agent.id}`);
-            whatsapp.startSession(agent.id, { printQR: false }).catch(err => {
-              console.error(`❌ Failed to auto-connect ${agent.id}:`, err.message);
-            });
-            connectCount++;
-          }
+      if (!data.agents || !Array.isArray(data.agents)) continue;
+
+      for (const agent of data.agents) {
+        const agentId = agent.id;
+        if (!agentId) continue;
+
+        // Skip deleted bots entirely
+        if (agent.deleted === true) {
+          console.log(`🗑️ Skipping deleted Agency bot: ${agentId}`);
+          skippedCount++;
+          continue;
         }
+
+        // Restore full config from Firebase to memory
+        await restoreBotConfig(agentId, {
+          ...agent,
+          ownerUid: `agency_${clientId}`,
+          botType: 'agency',
+        });
+
+        const isActive = agent.isActive !== false;
+        console.log(`🔌 Auto-connecting Agency bot: ${agentId} [${isActive ? 'ACTIVE ✅' : 'INACTIVE ⏸️'}]`);
+
+        whatsapp.startSession(agentId, { printQR: false }).catch(err => {
+          console.error(`❌ Failed to auto-connect ${agentId}:`, err.message);
+        });
+
+        if (!isActive) inactiveCount++;
+        connectCount++;
+
+        // Stagger connections by 200ms to avoid crashing under high load
+        await new Promise(resolve => setTimeout(resolve, 200));
       }
     }
 
-    console.log(`✅ Auto-Connect complete: Triggered reconnection for ${connectCount} agents.`);
+    console.log(`\n✅ Auto-Connect Boot Complete:`);
+    console.log(`   🟢 Connected:  ${connectCount} bots`);
+    console.log(`   ⏸️  Inactive:   ${inactiveCount} bots (connected, replies disabled)`);
+    console.log(`   🗑️  Skipped:   ${skippedCount} deleted bots`);
   } catch (error) {
     console.error("❌ Error during Auto-Connect:", error);
   }
@@ -1222,16 +1375,23 @@ function startTaskScheduler() {
     const now = new Date().toISOString();
 
     try {
+      // NOTE: Using single .where() to avoid composite index requirement.
+      // We filter by time in JavaScript below.
       const tasksSnap = await db.collection('scheduled_tasks')
         .where('status', '==', 'pending')
-        .where('time', '<=', now)
         .get();
 
-      if (tasksSnap.empty) return;
+      // Filter locally to those whose time has arrived
+      const dueTasks = tasksSnap.docs.filter(d => {
+        const t = d.data().time;
+        return t && t <= now;
+      });
 
-      console.log(`🔔 Scheduler: ${tasksSnap.size} tasks due.`);
+      if (dueTasks.length === 0) return;
 
-      for (const doc of tasksSnap.docs) {
+      console.log(`🔔 Scheduler: ${dueTasks.length} tasks due.`);
+
+      for (const doc of dueTasks) {
         const task = doc.data();
         const taskId = doc.id;
         const retryCount = task.retryCount || 0;

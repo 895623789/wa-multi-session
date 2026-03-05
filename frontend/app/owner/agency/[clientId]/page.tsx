@@ -72,6 +72,8 @@ export default function ClientManagement() {
 
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editAgentId, setEditAgentId] = useState<string | null>(null);
+    const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; agent: AgentConfig | null }>({ open: false, agent: null });
+    const [isDeleting, setIsDeleting] = useState(false);
 
     // Create Agent Form State
     const [newAgent, setNewAgent] = useState({
@@ -187,6 +189,24 @@ export default function ClientManagement() {
             }).catch(e => console.error("Failed to sync logic status", e));
         } catch (err) {
             console.error("Failed to toggle agent logic:", err);
+        }
+    };
+
+    const handleDeleteBot = async (agent: AgentConfig) => {
+        setIsDeleting(true);
+        try {
+            const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+            await fetch(`${baseUrl}/bot/delete`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ sessionId: agent.id, clientId })
+            });
+            setAgents(prev => prev.filter(a => a.id !== agent.id));
+            setDeleteConfirm({ open: false, agent: null });
+        } catch (err) {
+            console.error("Delete bot failed:", err);
+        } finally {
+            setIsDeleting(false);
         }
     };
 
@@ -464,7 +484,13 @@ export default function ClientManagement() {
                             Automation Units
                         </h2>
                         <button
-                            onClick={() => setViewState('create')}
+                            onClick={() => {
+                                // Reset any stale edit state before opening create form
+                                setIsEditModalOpen(false);
+                                setEditAgentId(null);
+                                setNewAgent({ name: "", role: "Sales Assistant", businessInfo: "", instructions: "" });
+                                setViewState('create');
+                            }}
                             className="bg-slate-900 hover:bg-indigo-600 text-white px-5 py-2.5 rounded-2xl text-[11px] font-black uppercase tracking-widest transition-all active:scale-95 flex items-center gap-2 shadow-xl shadow-slate-900/10"
                         >
                             <Plus size={16} strokeWidth={3} />
@@ -550,6 +576,13 @@ export default function ClientManagement() {
                                             title="Edit Agent Settings"
                                         >
                                             <Edit size={16} />
+                                        </button>
+                                        <button
+                                            onClick={() => setDeleteConfirm({ open: true, agent })}
+                                            className="w-[44px] h-[44px] bg-rose-50 text-rose-400 rounded-2xl flex items-center justify-center hover:text-rose-600 hover:bg-rose-100 transition-all active:scale-90 shrink-0 border border-rose-100"
+                                            title="Delete Bot"
+                                        >
+                                            <Trash2 size={16} />
                                         </button>
                                     </div>
                                 </motion.div>
@@ -715,6 +748,71 @@ export default function ClientManagement() {
                             </div>
                         </motion.div>
                     </div>
+                )}
+            </AnimatePresence>
+
+            {/* ── Delete Bot Confirmation Modal ───────────────── */}
+            <AnimatePresence>
+                {deleteConfirm.open && deleteConfirm.agent && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+                        onClick={() => !isDeleting && setDeleteConfirm({ open: false, agent: null })}
+                    >
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                            transition={{ type: "spring", stiffness: 300, damping: 25 }}
+                            onClick={e => e.stopPropagation()}
+                            className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl"
+                        >
+                            {/* Icon */}
+                            <div className="w-16 h-16 bg-rose-100 rounded-2xl flex items-center justify-center mx-auto mb-5">
+                                <Trash2 className="text-rose-500" size={28} />
+                            </div>
+
+                            {/* Title */}
+                            <h2 className="text-xl font-black text-slate-800 text-center mb-2">Delete Bot?</h2>
+                            <p className="text-slate-500 text-sm text-center mb-1">
+                                You are about to permanently delete:
+                            </p>
+                            <p className="text-indigo-600 font-bold text-sm text-center mb-4 bg-indigo-50 rounded-xl px-4 py-2">
+                                {deleteConfirm.agent.name || deleteConfirm.agent.id}
+                            </p>
+
+                            {/* Warning */}
+                            <div className="bg-rose-50 border border-rose-100 rounded-2xl p-4 mb-6">
+                                <p className="text-rose-600 text-xs font-semibold text-center">
+                                    ⚠️ This will disconnect the WhatsApp session, remove all bot data from Firebase, and cannot be undone.
+                                </p>
+                            </div>
+
+                            {/* Buttons */}
+                            <div className="flex gap-3">
+                                <button
+                                    onClick={() => setDeleteConfirm({ open: false, agent: null })}
+                                    disabled={isDeleting}
+                                    className="flex-1 py-3 bg-slate-100 text-slate-600 rounded-2xl text-sm font-bold hover:bg-slate-200 transition-all disabled:opacity-50"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={() => handleDeleteBot(deleteConfirm.agent!)}
+                                    disabled={isDeleting}
+                                    className="flex-1 py-3 bg-rose-500 text-white rounded-2xl text-sm font-bold hover:bg-rose-600 transition-all disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-rose-100"
+                                >
+                                    {isDeleting ? (
+                                        <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Deleting...</>
+                                    ) : (
+                                        <><Trash2 size={14} /> Yes, Delete</>
+                                    )}
+                                </button>
+                            </div>
+                        </motion.div>
+                    </motion.div>
                 )}
             </AnimatePresence>
         </div>
