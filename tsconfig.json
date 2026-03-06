@@ -4,7 +4,8 @@
     "dist/*",
     "list-models.ts",
     "test-gemini.mjs",
-    "frontend"
+    "frontend",
+    "src/Store/Sqlite.ts"
   ],
   "compilerOptions": {
     /* Visit https://aka.ms/tsconfig to read more about this file */

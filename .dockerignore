@@ -1,0 +1,8 @@
+node_modules
+dist
+frontend/.next
+frontend/node_modules
+.git
+.env
+*.log
+wa_credentials
