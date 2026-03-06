@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -110,10 +110,10 @@ export default function PaymentsPage() {
         const monthRev = monthPayments.reduce((acc, p) => acc + (p.amount || 0), 0);
 
         return [
-            { name: "Today", value: `₹${todayRev.toLocaleString()}`, count: `${todayPayments.length} payments`, color: "blue" },
-            { name: "This Week", value: `₹${weekRev.toLocaleString()}`, count: `${weekPayments.length} payments`, color: "indigo" },
-            { name: "This Month", value: `₹${monthRev.toLocaleString()}`, count: `${monthPayments.length} payments`, color: "emerald" },
-            { name: "Total Revenue", value: `₹${totalRevenue.toLocaleString()}`, count: `${payments.length} payments`, color: "violet" },
+            { name: "Today", value: "₹" + todayRev.toLocaleString(), count: todayPayments.length + " payments", color: "blue" },
+            { name: "This Week", value: "₹" + weekRev.toLocaleString(), count: weekPayments.length + " payments", color: "indigo" },
+            { name: "This Month", value: "₹" + monthRev.toLocaleString(), count: monthPayments.length + " payments", color: "emerald" },
+            { name: "Total Revenue", value: "₹" + totalRevenue.toLocaleString(), count: payments.length + " payments", color: "violet" },
         ];
     };
 
@@ -166,10 +166,7 @@ export default function PaymentsPage() {
                     >
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-3">{stat.name}</p>
                         <h3 className="text-2xl font-black text-slate-900 font-outfit mb-1">{stat.value}</h3>
-                        <p className={`text-[10px] font-bold px-2 py-0.5 rounded-lg w-fit ${stat.color === 'blue' ? 'bg-blue-50 text-blue-600' :
-                            stat.color === 'indigo' ? 'bg-indigo-50 text-indigo-600' :
-                                stat.color === 'emerald' ? 'bg-emerald-50 text-emerald-600' : 'bg-violet-50 text-violet-600'
-                            }`}>
+                        <p className={	ext-[10px] font-bold px-2 py-0.5 rounded-lg w-fit }>
                             {stat.count}
                         </p>
                     </motion.div>
@@ -201,12 +198,11 @@ export default function PaymentsPage() {
                             <div key={month} className="flex-1 flex flex-col items-center gap-3 group relative h-full justify-end">
                                 <motion.div
                                     initial={{ height: 0 }}
-                                    animate={{ height: `${20 + (i * 7) % 80}%` }}
+                                    animate={{ height: (20 + (i * 7) % 80) + "%" }}
                                     transition={{ delay: 0.5 + i * 0.05, type: "spring", stiffness: 80 }}
-                                    className={`w-full max-w-[32px] rounded-t-xl transition-all ${i === 11 ? 'bg-indigo-600 shadow-lg shadow-indigo-100' : 'bg-indigo-100 group-hover:bg-indigo-200'
-                                        }`}
+                                    className={w-full max-w-[32px] rounded-t-xl transition-all }
                                 ></motion.div>
-                                <span className={`text-[10px] font-black uppercase text-slate-400 ${i === 11 ? 'text-indigo-600' : ''}`}>{month}</span>
+                                <span className={	ext-[10px] font-black uppercase text-slate-400 }>{month}</span>
 
                                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 opacity-0 group-hover:opacity-100 transition-opacity z-10 pointer-events-none">
                                     <div className="px-3 py-1.5 bg-slate-900 text-white text-[10px] font-black rounded-lg shadow-xl whitespace-nowrap">
@@ -262,9 +258,9 @@ export default function PaymentsPage() {
 
                     <div className="mt-auto pt-6">
                         <div className="h-1.5 w-full bg-slate-50 rounded-full overflow-hidden flex">
-                            <div className="h-full bg-indigo-600" style={{ width: `${razorpayPerc}%` }}></div>
-                            <div className="h-full bg-emerald-500" style={{ width: `${upiPerc}%` }}></div>
-                            <div className="h-full bg-amber-500" style={{ width: `${manualPerc}%` }}></div>
+                            <div className="h-full bg-indigo-600" style={{ width: razorpayPerc + "%" }}></div>
+                            <div className="h-full bg-emerald-500" style={{ width: upiPerc + "%" }}></div>
+                            <div className="h-full bg-amber-500" style={{ width: manualPerc + "%" }}></div>
                         </div>
                         <p className="text-[10px] font-bold text-slate-400 mt-3 text-center uppercase tracking-widest">Revenue Source Distribution</p>
                     </div>
@@ -331,9 +327,7 @@ export default function PaymentsPage() {
                                         </td>
                                         <td className="px-8 py-5 text-xs font-bold text-slate-600">{log.method}</td>
                                         <td className="px-8 py-5 text-right">
-                                            <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-black uppercase ${log.status === 'Paid' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                                                log.status === 'Pending' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-rose-50 text-rose-600 border-rose-100'
-                                                }`}>
+                                            <div className={inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-black uppercase }>
                                                 {log.status === 'Paid' ? <CheckCircle2 size={12} /> : log.status === 'Pending' ? <Clock size={12} /> : <XCircle size={12} />}
                                                 {log.status}
                                             </div>
