@@ -3,11 +3,10 @@ import React, { useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import DashboardSidebar from "@/components/DashboardSidebar";
-// Removed DashboardNavbar to achieve cleaner SaaS look
 import { useAuth } from "@/components/AuthProvider";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
-import { LayoutDashboard, MessageCircle, Send, Settings, LogOut, User, Bot } from "lucide-react";
+import { LayoutDashboard, MessageCircle, Send, Settings, LogOut, User, Bot, RefreshCcw } from "lucide-react";
 import SubscriptionBanner from "@/components/SubscriptionBanner";
 import BlockedScreen from "@/components/BlockedScreen";
 
@@ -19,7 +18,7 @@ const mobileNavLinks = [
     { name: "Profile", href: "/dashboard/profile", icon: User },
 ];
 
-function MobileBottomNav() {
+function MobileBottomNav({ userData }: { userData: any }) {
     const pathname = usePathname();
 
     // Hide bottom nav entirely on the admin chat page for full-screen mobile experience
@@ -47,6 +46,15 @@ function MobileBottomNav() {
                         </Link>
                     );
                 })}
+                {userData && String(userData.owner) === "true" && (
+                    <Link
+                        href="/owner/dashboard"
+                        className="relative flex flex-col items-center justify-center gap-1 flex-1 h-full rounded-2xl transition-all duration-300 text-amber-600 active:scale-95"
+                    >
+                        <RefreshCcw className="w-5 h-5 transition-transform duration-300" />
+                        <span className="text-[10px] font-medium tracking-tight text-amber-700">Switch</span>
+                    </Link>
+                )}
             </div>
         </nav>
     );
@@ -92,18 +100,19 @@ export default function DashboardLayout({
         : "max-w-7xl mx-auto w-full";
 
     return (
-        <div className="flex h-screen overflow-x-visible" style={{ background: 'var(--bg)', color: 'var(--text-primary)' }}>
+        <div className="flex h-screen overflow-x-visible relative" style={{ background: 'var(--bg)', color: 'var(--text-primary)' }}>
             <SubscriptionBanner />
             <DashboardSidebar />
-            <div className="flex flex-col flex-1 min-w-0 h-full">
+            <div className="flex flex-col flex-1 min-w-0 h-full overflow-hidden">
                 <main className={mainClasses}>
                     <div className={containerClasses}>
                         {children}
                     </div>
                 </main>
             </div>
-            <MobileBottomNav />
+            <MobileBottomNav userData={userData} />
         </div>
     );
 }
+
 

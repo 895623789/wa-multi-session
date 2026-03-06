@@ -444,8 +444,30 @@ export default function UnifiedAgentsPage() {
 
             {/* HEADER & SEARCH BAR */}
             {viewState === 'list' && (
-                <div className="w-full max-w-6xl mb-8 space-y-6 animate-in fade-in slide-in-from-top-4 duration-700">
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div className="w-full max-w-6xl mb-8 space-y-4 animate-in fade-in slide-in-from-top-4 duration-700">
+                    {/* Mobile Header (Only visible on small screens) */}
+                    <div className="md:hidden flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2">
+                            <Bot className="w-6 h-6 text-primary" />
+                            <h2 className="text-xl font-black text-slate-900 dark:text-white font-outfit">Agents</h2>
+                        </div>
+                        <button
+                            onClick={() => {
+                                if (isExpired) return setUpgradeModal(true);
+                                if (connectedSessions.length >= (subscription?.maxSessions || 100)) {
+                                    return showToast("Limit Reached", `Your plan has reached its bot capacity.`, "error");
+                                }
+                                resetWizard();
+                                setViewState('type_selection');
+                            }}
+                            className="p-2 bg-primary text-white rounded-xl active:scale-95 shadow-md flex items-center justify-center"
+                        >
+                            <Plus className="w-5 h-5" />
+                        </button>
+                    </div>
+
+                    {/* Desktop Header */}
+                    <div className="hidden md:flex justify-between items-start md:items-center gap-4">
                         <div>
                             <div className="flex items-center gap-2 mb-1">
                                 <Bot className="w-6 h-6 text-primary" />
@@ -457,12 +479,9 @@ export default function UnifiedAgentsPage() {
                             <button
                                 onClick={() => {
                                     if (isExpired) return setUpgradeModal(true);
-
-                                    // Subscription limits check (simplified for now but backend enforces strict counts)
                                     if (connectedSessions.length >= (subscription?.maxSessions || 100)) {
                                         return showToast("Limit Reached", `Your plan has reached its bot capacity.`, "error");
                                     }
-
                                     resetWizard();
                                     setViewState('type_selection');
                                 }}
@@ -479,14 +498,14 @@ export default function UnifiedAgentsPage() {
                         </div>
                     </div>
 
-                    <div className="relative group">
+                    <div className="relative group mt-2 md:mt-0">
                         <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-primary transition-colors" />
                         <input
                             type="text"
                             placeholder="Search by Agent Name or Role..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 py-5 pl-14 pr-6 rounded-[1.5rem] outline-none focus:border-primary/50 focus:ring-4 ring-primary/5 transition-all font-bold text-slate-800 dark:text-white placeholder:text-slate-300 shadow-sm"
+                            className="w-full bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 py-3 md:py-5 pl-14 pr-6 rounded-[1.5rem] outline-none focus:border-primary/50 focus:ring-4 ring-primary/5 transition-all font-bold text-slate-800 dark:text-white placeholder:text-slate-300 shadow-sm"
                         />
                     </div>
                 </div>

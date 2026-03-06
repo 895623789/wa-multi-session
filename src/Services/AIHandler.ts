@@ -360,7 +360,7 @@ export async function generateOutreach(
 
     try {
         const model = genAI.getGenerativeModel({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-1.5-flash',
             systemInstruction: (customInstructions || "You are a professional business developer representative.") + "\n\n" +
                 "FORMATTING & FLOW RULES:\n" +
                 "1. Use *bold text* for keywords.\n" +

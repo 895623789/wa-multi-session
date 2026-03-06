@@ -13,7 +13,9 @@ import {
     CheckCircle2,
     XCircle,
     Clock,
-    Loader2
+    Loader2,
+    ShieldCheck,
+    Shield
 } from "lucide-react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -28,6 +30,7 @@ interface FirestoreUser {
     phone: string;
     plan: string;
     blocked?: boolean;
+    owner?: string | boolean;
     onboardingComplete: boolean;
     createdAt: any;
     subscription?: {
@@ -59,6 +62,7 @@ export default function UsersList() {
                         phone: data.phone || "",
                         plan: data.subscription?.plan || data.plan || "Free",
                         blocked: data.blocked || false,
+                        owner: data.owner || false,
                         onboardingComplete: data.onboardingComplete || false,
                         createdAt: data.createdAt,
                         subscription: data.subscription,
@@ -105,6 +109,25 @@ export default function UsersList() {
         } catch (err) {
             console.error("Unblock failed:", err);
             toast("Unblock Failed", "Could not unblock user. Check console.", "error");
+        }
+        setActionLoading(null);
+    };
+
+    // Toggle Owner Role
+    const handleToggleOwner = async (uid: string, currentStatus: boolean) => {
+        setActionLoading(`owner-${uid}`);
+        try {
+            await updateDoc(doc(db, "users", uid), {
+                owner: !currentStatus ? "true" : deleteField()
+            });
+            toast(
+                !currentStatus ? "Promoted to Owner" : "Demoted from Owner",
+                `User access level has been updated.`,
+                !currentStatus ? "success" : "info"
+            );
+        } catch (err) {
+            console.error("Owner toggle failed:", err);
+            toast("Update Failed", "Could not change owner status.", "error");
         }
         setActionLoading(null);
     };
@@ -276,6 +299,23 @@ export default function UsersList() {
                                                 >
                                                     <Eye size={18} />
                                                 </Link>
+                                                <button
+                                                    onClick={() => handleToggleOwner(user.uid, String(user.owner) === "true")}
+                                                    disabled={actionLoading === `owner-${user.uid}`}
+                                                    className={`p-2 rounded-xl transition-all shadow-none hover:shadow-sm ${String(user.owner) === "true"
+                                                        ? "text-indigo-600 bg-indigo-50 hover:bg-white"
+                                                        : "text-slate-400 hover:text-indigo-600 hover:bg-white"
+                                                        }`}
+                                                    title={String(user.owner) === "true" ? "Demote from Owner" : "Promote to Owner"}
+                                                >
+                                                    {actionLoading === `owner-${user.uid}` ? (
+                                                        <Loader2 size={18} className="animate-spin text-indigo-500" />
+                                                    ) : String(user.owner) === "true" ? (
+                                                        <ShieldCheck size={18} />
+                                                    ) : (
+                                                        <Shield size={18} />
+                                                    )}
+                                                </button>
                                             </div>
                                         </td>
                                     </tr>

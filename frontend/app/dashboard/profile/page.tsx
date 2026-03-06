@@ -39,12 +39,7 @@ export default function ProfilePage() {
     return (
         <div className="max-w-2xl mx-auto pb-12">
 
-            {/* Header */}
-            <div className="mb-6 pt-2">
-                <h1 className="text-xl font-bold font-outfit tracking-tight" style={{ color: 'var(--text-primary)' }}>
-                    Profile
-                </h1>
-            </div>
+
 
             <motion.div
                 initial={{ opacity: 0, y: 10 }}
