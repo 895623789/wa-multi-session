@@ -37,7 +37,9 @@ const INITIAL_PLANS = [
             maxMsgsPerDay: 200,
             aiReply: true,
             agents: 1,
-            apiAccess: false
+            apiAccess: false,
+            apiFreeCredits: 0,
+            apiCostPerReq: 0
         },
         users: 142,
         active: true,
@@ -52,7 +54,9 @@ const INITIAL_PLANS = [
             maxMsgsPerDay: 1000,
             aiReply: true,
             agents: 2,
-            apiAccess: false
+            apiAccess: false,
+            apiFreeCredits: 0,
+            apiCostPerReq: 0
         },
         users: 285,
         active: true,
@@ -67,7 +71,9 @@ const INITIAL_PLANS = [
             maxMsgsPerDay: 50000,
             aiReply: true,
             agents: 10,
-            apiAccess: true
+            apiAccess: true,
+            apiFreeCredits: 15,
+            apiCostPerReq: 5
         },
         users: 94,
         active: true,
@@ -82,7 +88,9 @@ const INITIAL_PLANS = [
             maxMsgsPerDay: "Unlimited",
             aiReply: true,
             agents: "Custom",
-            apiAccess: true
+            apiAccess: true,
+            apiFreeCredits: 9999,
+            apiCostPerReq: 0
         },
         users: 12,
         active: true,
@@ -109,7 +117,9 @@ export default function PlansManagement() {
             maxMsgsPerDay: 500,
             aiReply: true,
             agents: 1,
-            apiAccess: false
+            apiAccess: false,
+            apiFreeCredits: 15,
+            apiCostPerReq: 5
         }
     });
 
@@ -140,7 +150,9 @@ export default function PlansManagement() {
                 maxMsgsPerDay: 500,
                 aiReply: true,
                 agents: 1,
-                apiAccess: false
+                apiAccess: false,
+                apiFreeCredits: 15,
+                apiCostPerReq: 5
             }
         });
         setEditingPlan(null);
@@ -197,7 +209,14 @@ export default function PlansManagement() {
             duration: plan.duration,
             active: plan.active,
             color: plan.color || "indigo",
-            limits: { ...plan.limits }
+            limits: {
+                maxMsgsPerDay: plan.limits?.maxMsgsPerDay || 0,
+                aiReply: plan.limits?.aiReply || false,
+                agents: plan.limits?.agents || 0,
+                apiAccess: plan.limits?.apiAccess || false,
+                apiFreeCredits: plan.limits?.apiFreeCredits || 0,
+                apiCostPerReq: plan.limits?.apiCostPerReq || 0
+            }
         });
         setIsAddingPlan(true);
     };
@@ -338,6 +357,7 @@ export default function PlansManagement() {
                                     </div>
                                     <span className="text-xs font-black text-slate-800 tracking-tight">{plan.limits?.maxMsgsPerDay}</span>
                                 </div>
+
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
                                         <Bot size={14} className="text-indigo-400" />
@@ -345,6 +365,7 @@ export default function PlansManagement() {
                                     </div>
                                     {plan.limits?.aiReply ? <Check size={16} className="text-emerald-500" /> : <X size={16} className="text-rose-400" />}
                                 </div>
+
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
                                         <Shield size={14} className="text-indigo-400" />
@@ -352,6 +373,20 @@ export default function PlansManagement() {
                                     </div>
                                     {plan.limits?.apiAccess ? <Check size={16} className="text-emerald-500" /> : <X size={16} className="text-rose-400" />}
                                 </div>
+
+                                {plan.limits?.apiAccess && (
+                                    <div className="p-3 bg-indigo-50/30 rounded-2xl border border-indigo-50 space-y-2">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[10px] font-black text-indigo-400 uppercase">Free API Quota</span>
+                                            <span className="text-[10px] font-black text-indigo-600">{plan.limits?.apiFreeCredits} Units</span>
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[10px] font-black text-indigo-400 uppercase">Cost Per Req</span>
+                                            <span className="text-[10px] font-black text-indigo-600">₹{plan.limits?.apiCostPerReq}</span>
+                                        </div>
+                                    </div>
+                                )}
+
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
                                         <Zap size={14} className="text-indigo-400" />
@@ -421,8 +456,10 @@ export default function PlansManagement() {
                                 { feat: "WA Sessions", key: "agents" },
                                 { feat: "Messages / Day", key: "maxMsgsPerDay" },
                                 { feat: "AI Engine", key: "aiReply" },
-                                { feat: "Bulk Messaging", key: "aiReply" }, // Dummy check
+                                { feat: "Bulk Messaging", key: "aiReply" },
                                 { feat: "API Access", key: "apiAccess" },
+                                { feat: "Free API Cr.", key: "apiFreeCredits" },
+                                { feat: "API Cost/Req", key: "apiCostPerReq", prefix: "₹" },
                             ].map((row, i) => (
                                 <tr key={i} className="hover:bg-slate-50/50 transition-colors">
                                     <td className="px-8 py-4 text-sm font-bold text-slate-700">{row.feat}</td>
@@ -430,7 +467,7 @@ export default function PlansManagement() {
                                         const val = p.limits[row.key];
                                         return (
                                             <td key={p.id} className={`px-8 py-4 text-xs font-black ${p.id === 'pro' ? 'text-emerald-600 bg-emerald-50/20' : 'text-slate-500'}`}>
-                                                {typeof val === 'boolean' ? (val ? <Check className="text-emerald-500" size={16} /> : <X className="text-rose-400" size={16} />) : val}
+                                                {typeof val === 'boolean' ? (val ? <Check className="text-emerald-500" size={16} /> : <X className="text-rose-400" size={16} />) : (row.prefix ? row.prefix + val : val)}
                                             </td>
                                         );
                                     })}
@@ -518,6 +555,41 @@ export default function PlansManagement() {
                                     className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold"
                                 />
                             </div>
+
+                            <AnimatePresence>
+                                {formState.limits.apiAccess && (
+                                    <>
+                                        <motion.div
+                                            initial={{ opacity: 0, height: 0 }}
+                                            animate={{ opacity: 1, height: 'auto' }}
+                                            exit={{ opacity: 0, height: 0 }}
+                                            className="space-y-4"
+                                        >
+                                            <label className="text-xs font-black text-indigo-400 uppercase tracking-widest">Free API Credits</label>
+                                            <input
+                                                type="number"
+                                                value={formState.limits.apiFreeCredits}
+                                                onChange={(e) => setFormState({ ...formState, limits: { ...formState.limits, apiFreeCredits: parseInt(e.target.value) || 0 } })}
+                                                className="w-full px-4 py-3 bg-indigo-50/50 border border-indigo-100 rounded-2xl text-sm focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold"
+                                            />
+                                        </motion.div>
+                                        <motion.div
+                                            initial={{ opacity: 0, height: 0 }}
+                                            animate={{ opacity: 1, height: 'auto' }}
+                                            exit={{ opacity: 0, height: 0 }}
+                                            className="space-y-4"
+                                        >
+                                            <label className="text-xs font-black text-indigo-400 uppercase tracking-widest">Cost Per API Req (₹)</label>
+                                            <input
+                                                type="number"
+                                                value={formState.limits.apiCostPerReq}
+                                                onChange={(e) => setFormState({ ...formState, limits: { ...formState.limits, apiCostPerReq: parseInt(e.target.value) || 0 } })}
+                                                className="w-full px-4 py-3 bg-indigo-50/50 border border-indigo-100 rounded-2xl text-sm focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold"
+                                            />
+                                        </motion.div>
+                                    </>
+                                )}
+                            </AnimatePresence>
 
                             <div className="md:col-span-2 space-y-4">
                                 <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Feature Bundle</label>

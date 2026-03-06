@@ -1,4 +1,10 @@
+"use client";
+import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+    Plus, TrendingUp, CreditCard, DollarSign, Search, Filter, Calendar,
+    CheckCircle2, Clock, XCircle, Download, ChevronLeft, ChevronRight, X, User
+} from "lucide-react";
 import {
     collection,
     onSnapshot,
@@ -26,7 +32,7 @@ export default function PaymentsPage() {
     const [isSaving, setIsSaving] = useState(false);
 
     // Real-time Firestore listener for payments
-    React.useEffect(() => {
+    useEffect(() => {
         const q = query(collection(db, "payments"), orderBy("timestamp", "desc"));
         const unsub = onSnapshot(q, (snapshot) => {
             const list = snapshot.docs.map(doc => ({
@@ -40,7 +46,7 @@ export default function PaymentsPage() {
     }, []);
 
     // User search logic for modal
-    React.useEffect(() => {
+    useEffect(() => {
         if (userSearchTerm.length < 2) {
             setUsers([]);
             return;
@@ -326,151 +332,152 @@ export default function PaymentsPage() {
                                         <td className="px-8 py-5 text-xs font-bold text-slate-600">{log.method}</td>
                                         <td className="px-8 py-5 text-right">
                                             <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full border text-[10px] font-black uppercase ${log.status === 'Paid' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                                                235:                                                 log.status === 'Pending' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-rose-50 text-rose-600 border-rose-100'
-236:                                             }`}>
-                                            237:                                             {log.status === 'Paid' ? <CheckCircle2 size={12} /> : log.status === 'Pending' ? <Clock size={12} /> : <XCircle size={12} />}
-                                            238:                                             {log.status}
-                                            239:                                         </div>
-                                        240:                                     </td>
-241:                                 </tr>
-242:                             )})}
-                        243:                         </tbody>
-                </table>
-            </div>
+                                                log.status === 'Pending' ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-rose-50 text-rose-600 border-rose-100'
+                                                }`}>
+                                                {log.status === 'Paid' ? <CheckCircle2 size={12} /> : log.status === 'Pending' ? <Clock size={12} /> : <XCircle size={12} />}
+                                                {log.status}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                )
+                            })}
+                        </tbody>
+                    </table>
+                </div>
 
-            <div className="p-8 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between">
-                <button className="text-xs font-black text-indigo-600 hover:text-indigo-700 uppercase tracking-widest flex items-center gap-1 active:scale-95 transition-all">
-                    Download Comprehensive Report
-                    <Download size={14} />
-                </button>
-                <div className="flex items-center gap-2">
-                    <button className="p-2 border border-slate-200 rounded-xl text-slate-400 hover:bg-white transition-all disabled:opacity-50" disabled>
-                        <ChevronLeft size={18} />
+                <div className="p-8 bg-slate-50/50 border-t border-slate-100 flex items-center justify-between">
+                    <button className="text-xs font-black text-indigo-600 hover:text-indigo-700 uppercase tracking-widest flex items-center gap-1 active:scale-95 transition-all">
+                        Download Comprehensive Report
+                        <Download size={14} />
                     </button>
-                    <button className="p-2 border border-slate-200 rounded-xl text-slate-400 hover:bg-white transition-all">
-                        <ChevronRight size={18} />
-                    </button>
+                    <div className="flex items-center gap-2">
+                        <button className="p-2 border border-slate-200 rounded-xl text-slate-400 hover:bg-white transition-all disabled:opacity-50" disabled>
+                            <ChevronLeft size={18} />
+                        </button>
+                        <button className="p-2 border border-slate-200 rounded-xl text-slate-400 hover:bg-white transition-all">
+                            <ChevronRight size={18} />
+                        </button>
+                    </div>
                 </div>
             </div>
-        </div>
 
-            {/* Modal Overlay Placeholder */ }
-    {
-        isAddingPayment && (
-            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-                <motion.div
-                    initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    className="bg-white rounded-[32px] w-full max-w-lg shadow-2xl overflow-hidden border border-slate-100"
-                >
-                    <div className="p-8 border-b border-slate-50 bg-slate-50/50 flex items-center justify-between">
-                        <div>
-                            <h2 className="text-2xl font-black text-slate-900 font-outfit tracking-tight">Manual Payment Entry</h2>
-                            <p className="text-sm text-slate-500 font-medium">Record offline or manual transaction.</p>
-                        </div>
-                        <button
-                            onClick={() => setIsAddingPayment(false)}
-                            className="p-2 hover:bg-white rounded-xl text-slate-400 hover:text-slate-600 transition-all shadow-none hover:shadow-sm"
+            {/* Modal Overlay Placeholder */}
+            {
+                isAddingPayment && (
+                    <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            className="bg-white rounded-[32px] w-full max-w-lg shadow-2xl overflow-hidden border border-slate-100"
                         >
-                            <X size={24} />
-                        </button>
-                    </div>
-                    <div className="p-8 space-y-6">
-                        <div className="space-y-4">
-                            <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Search User</label>
-                            <div className="relative">
-                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                                <input
-                                    type="text"
-                                    placeholder="Type name or email..."
-                                    value={userSearchTerm}
-                                    onChange={(e) => {
-                                        setUserSearchTerm(e.target.value);
-                                        setSelectedUser(null);
-                                    }}
-                                    className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold"
-                                />
-
-                                {users.length > 0 && !selectedUser && (
-                                    <div className="absolute top-full left-0 right-0 bg-white border border-slate-100 shadow-xl rounded-2xl mt-2 z-50 max-h-48 overflow-y-auto">
-                                        {users.map(u => (
-                                            <button
-                                                key={u.uid}
-                                                onClick={() => {
-                                                    setSelectedUser(u);
-                                                    setUserSearchTerm(u.displayName);
-                                                }}
-                                                className="w-full text-left px-5 py-3 hover:bg-slate-50 flex flex-col border-b border-slate-50 last:border-0"
-                                            >
-                                                <span className="text-sm font-bold text-slate-900">{u.displayName}</span>
-                                                <span className="text-[10px] text-slate-400 uppercase font-black">{u.email}</span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                )}
-                            </div>
-                            {selectedUser && (
-                                <div className="px-4 py-2 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center gap-2">
-                                    <CheckCircle2 size={16} className="text-emerald-500" />
-                                    <span className="text-xs font-bold text-emerald-700">Selected: {selectedUser.displayName} ({selectedUser.plan || 'Free'})</span>
+                            <div className="p-8 border-b border-slate-50 bg-slate-50/50 flex items-center justify-between">
+                                <div>
+                                    <h2 className="text-2xl font-black text-slate-900 font-outfit tracking-tight">Manual Payment Entry</h2>
+                                    <p className="text-sm text-slate-500 font-medium">Record offline or manual transaction.</p>
                                 </div>
-                            )}
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="space-y-4">
-                                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Amount Paid</label>
-                                <input
-                                    type="number"
-                                    placeholder="₹"
-                                    value={manualAmount}
-                                    onChange={(e) => setManualAmount(e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-black text-indigo-600"
-                                />
-                            </div>
-                            <div className="space-y-4">
-                                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Payment Method</label>
-                                <select
-                                    value={manualMethod}
-                                    onChange={(e) => setManualMethod(e.target.value)}
-                                    className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold appearance-none"
+                                <button
+                                    onClick={() => setIsAddingPayment(false)}
+                                    className="p-2 hover:bg-white rounded-xl text-slate-400 hover:text-slate-600 transition-all shadow-none hover:shadow-sm"
                                 >
-                                    <option>Bank Transfer</option>
-                                    <option>UPI / GPay</option>
-                                    <option>Cash Receipt</option>
-                                    <option>Other</option>
-                                </select>
+                                    <X size={24} />
+                                </button>
                             </div>
-                        </div>
-                        <div className="space-y-4">
-                            <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Internal Note</label>
-                            <textarea
-                                rows={3}
-                                placeholder="Reference number or reason for manual entry..."
-                                value={manualNote}
-                                onChange={(e) => setManualNote(e.target.value)}
-                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
-                            ></textarea>
-                        </div>
+                            <div className="p-8 space-y-6">
+                                <div className="space-y-4">
+                                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Search User</label>
+                                    <div className="relative">
+                                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                        <input
+                                            type="text"
+                                            placeholder="Type name or email..."
+                                            value={userSearchTerm}
+                                            onChange={(e) => {
+                                                setUserSearchTerm(e.target.value);
+                                                setSelectedUser(null);
+                                            }}
+                                            className="w-full pl-12 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold"
+                                        />
+
+                                        {users.length > 0 && !selectedUser && (
+                                            <div className="absolute top-full left-0 right-0 bg-white border border-slate-100 shadow-xl rounded-2xl mt-2 z-50 max-h-48 overflow-y-auto">
+                                                {users.map(u => (
+                                                    <button
+                                                        key={u.uid}
+                                                        onClick={() => {
+                                                            setSelectedUser(u);
+                                                            setUserSearchTerm(u.displayName);
+                                                        }}
+                                                        className="w-full text-left px-5 py-3 hover:bg-slate-50 flex flex-col border-b border-slate-50 last:border-0"
+                                                    >
+                                                        <span className="text-sm font-bold text-slate-900">{u.displayName}</span>
+                                                        <span className="text-[10px] text-slate-400 uppercase font-black">{u.email}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                    {selectedUser && (
+                                        <div className="px-4 py-2 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center gap-2">
+                                            <CheckCircle2 size={16} className="text-emerald-500" />
+                                            <span className="text-xs font-bold text-emerald-700">Selected: {selectedUser.displayName} ({selectedUser.plan || 'Free'})</span>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-4">
+                                        <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Amount Paid</label>
+                                        <input
+                                            type="number"
+                                            placeholder="₹"
+                                            value={manualAmount}
+                                            onChange={(e) => setManualAmount(e.target.value)}
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-black text-indigo-600"
+                                        />
+                                    </div>
+                                    <div className="space-y-4">
+                                        <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Payment Method</label>
+                                        <select
+                                            value={manualMethod}
+                                            onChange={(e) => setManualMethod(e.target.value)}
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-bold appearance-none"
+                                        >
+                                            <option>Bank Transfer</option>
+                                            <option>UPI / GPay</option>
+                                            <option>Cash Receipt</option>
+                                            <option>Other</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="space-y-4">
+                                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Internal Note</label>
+                                    <textarea
+                                        rows={3}
+                                        placeholder="Reference number or reason for manual entry..."
+                                        value={manualNote}
+                                        onChange={(e) => setManualNote(e.target.value)}
+                                        className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-sm focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+                                    ></textarea>
+                                </div>
+                            </div>
+                            <div className="p-8 bg-slate-50 flex items-center justify-end gap-3">
+                                <button
+                                    onClick={() => setIsAddingPayment(false)}
+                                    className="px-6 py-3 font-bold text-slate-500 hover:text-slate-700 text-sm transition-all"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    onClick={handleRecordManualPayment}
+                                    disabled={isSaving}
+                                    className="px-10 py-3 bg-slate-900 text-white rounded-2xl text-sm font-black shadow-lg shadow-slate-200 hover:bg-slate-800 transition-all active:scale-[0.98] disabled:opacity-50"
+                                >
+                                    {isSaving ? "Saving..." : "Record Payment"}
+                                </button>
+                            </div>
+                        </motion.div>
                     </div>
-                    <div className="p-8 bg-slate-50 flex items-center justify-end gap-3">
-                        <button
-                            onClick={() => setIsAddingPayment(false)}
-                            className="px-6 py-3 font-bold text-slate-500 hover:text-slate-700 text-sm transition-all"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            onClick={handleRecordManualPayment}
-                            disabled={isSaving}
-                            className="px-10 py-3 bg-slate-900 text-white rounded-2xl text-sm font-black shadow-lg shadow-slate-200 hover:bg-slate-800 transition-all active:scale-[0.98] disabled:opacity-50"
-                        >
-                            {isSaving ? "Saving..." : "Record Payment"}
-                        </button>
-                    </div>
-                </motion.div>
-            </div>
-        )
-    }
+                )
+            }
         </div >
     );
 }

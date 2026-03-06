@@ -190,7 +190,7 @@ const tools = [
                         },
                         time: {
                             type: SchemaType.STRING,
-                            description: "The target time in ISO format or a human-readable duration (e.g., '2026-03-05T06:00:00Z', 'in 5 minutes', 'tomorrow at 10am')."
+                            description: "The EXACT target time in ISO format (e.g., '2026-03-06T20:15:00.000Z'). Calculate this yourself using the current local time provided in your instructions."
                         },
                         data: {
                             type: SchemaType.OBJECT,
@@ -272,10 +272,13 @@ ${customInstructions ? customInstructions : "No custom instructions. Focus stric
 - RULE 4 (NO HALLUCINATIONS): YOU ARE STRICTLY CONFINED to the [PROVIDED BUSINESS KNOWLEDGE]. If a user asks about a service, product, price, loan, or offer that is NOT explicitly mentioned above, you MUST say you don't know or don't offer it. Do NOT make up information.
 
 --- ADVANCED CAPABILITIES & TOOLS ---
-1. **TIME AWARENESS**: The current local time is ${currentTime || new Date().toLocaleString()}. Use this to parse relative times like "tomorrow", "in 10 minutes", or "next Friday".
+1. **TIME AWARENESS**: The current local time is ${currentTime || new Date().toLocaleString()}. 
+   - When scheduling, you MUST calculate the absolute ISO timestamp yourself. 
+   - Example: If it's 7:45 PM and they say "in 10 mins", you calculate 7:55 PM today and provide the ISO string.
 2. **OCR & Extraction**: If the Boss sends a PDF or Image, extract all phone numbers. If a 10-digit number like "9988776655" is found, automatically format it as "919988776655" (Indian standard) if no code is present.
-3. **Scheduling**: You can schedule reminders for the Boss or messages for contacts at specific times. You can now also schedule MEDIA (images) by including it in the schedule_task tool.
-4. **Image Gen**: You can generate images for marketing or just for fun. Use the generate_image tool.
+3. **Scheduling**: You can schedule reminders for the Boss or messages for contacts. confirm the EXACT time you calculated to the Boss. You can also schedule recurring tasks (daily/weekly).
+4. **Repeating Tasks**: For "Daily at 8 AM", calculate the next occurrence's ISO time and set 'repeat: daily'.
+5. **Image Gen**: You can generate images for marketing or just for fun. Use the generate_image tool.
 
 --- INTERCEPTION & PROACTIVE SUPPORT ---
 - If you are being asked to "Review" or "Suggest a Reply" for an intercepted message from a stranger:
@@ -361,20 +364,26 @@ export async function generateOutreach(
     try {
         const model = genAI.getGenerativeModel({
             model: 'gemini-1.5-flash',
-            systemInstruction: (customInstructions || "You are a professional business developer representative.") + "\n\n" +
-                "FORMATTING & FLOW RULES:\n" +
-                "1. Use *bold text* for keywords.\n" +
-                "2. Use professional emojis (🚀, ✅, 🛡️).\n" +
-                "3. Use the '[SPLIT]' delimiter to separate the introduction from the call to action.\n" +
-                "4. Be confident, helpful, and concise.\n" +
-                "5. Use Hindi/English (Hinglish) as preferred by Indian business owners if the context suggests so, or professional English.",
+            systemInstruction: (customInstructions || "You are an elite Business Growth Specialist and professional outreach expert.") + "\n\n" +
+                "STRATEGIC FORMATTING RULES:\n" +
+                "1. POWERFUL BOLDING: Bold ONLY the most important value propositions, keywords, or benefits (e.g. *20% discount*, *Instant Setup*, *Zero Maintenance*).\n" +
+                "2. VISUAL HIERARCHY: Use professional emojis (🚀, 💎, ✅, 🛡️) at the start of key points to guide the eye.\n" +
+                "3. NATURAL FLOW: Use the '[SPLIT]' delimiter exactly once to separate the hook/intro from the call-to-action.\n" +
+                "4. PERSUASIVE COPY: Use the AIDA (Attention, Interest, Desire, Action) framework.\n" +
+                "5. PERSONA & LANGUAGE: Speak in a warm, confident, and professional 'Hinglish' tone (mix of Hindi and English) as if you are a senior partner in an Indian tech firm, unless requested otherwise.",
         });
 
-        const prompt = `Business Context: ${businessContext}\n\nTask: Generate a professional, warm, and engaging introduction/outreach message to a potential client. Introduce the benefits for their business specifically.`;
+        const prompt = `BUSINESS PROFILE / CAMPAIGN CONTEXT:
+${businessContext}
+
+TASK:
+Craft a high-conversion, personalized WhatsApp outreach message for this business. 
+Focus on solving the client's problem and offering immediate value.
+Remember to use '[SPLIT]' between the body and the call-to-action.`;
         const result = await model.generateContent(prompt);
         const response = result.response;
 
-        return response.text() || "Hello! I'd love to discuss how our solutions can help your business.";
+        return response.text() || "Namaste! I'd love to discuss how our solutions can help your business grow. [SPLIT] When can we chat?";
     } catch (error) {
         console.error("Gemini AI Outreach Error:", error);
         return null;

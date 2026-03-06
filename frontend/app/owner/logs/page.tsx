@@ -24,12 +24,22 @@ import {
 import { motion } from "framer-motion";
 
 export default function ActivityLogsPage() {
-    const [liveStream, setLiveStream] = useState(true);
+    const [lastSync, setLastSync] = useState<string | null>(null);
+    const [hasFetched, setHasFetched] = useState(false);
     const [logs, setLogs] = useState<any[]>([]);
-    const [stats, setStats] = useState({ logs24h: 0, alerts: 0, queriesPerSec: 0, uptime: "100%" });
-    const [loading, setLoading] = useState(true);
+    const [stats, setStats] = useState({
+        logs24h: 0,
+        alerts: 0,
+        messagesSent: 0,
+        botsTotal: 0,
+        botsActive: 0,
+        botsDeleted: 0,
+        botsOffline: 0
+    });
+    const [loading, setLoading] = useState(false);
 
     const fetchLogs = async () => {
+        setLoading(true);
         try {
             const res = await fetch("http://localhost:5000/owner/logs");
             if (res.ok) {
@@ -37,11 +47,16 @@ export default function ActivityLogsPage() {
                 if (data.logs) setLogs(data.logs);
                 if (data.stats) setStats({
                     ...stats,
-                    logs24h: data.stats.logs24h || stats.logs24h,
-                    alerts: data.stats.alerts || stats.alerts,
-                    queriesPerSec: data.stats.queriesPerSec || stats.queriesPerSec,
-                    uptime: data.stats.uptime || stats.uptime
+                    logs24h: data.stats.logs24h ?? stats.logs24h,
+                    alerts: data.stats.alerts ?? stats.alerts,
+                    messagesSent: data.stats.messagesSent ?? stats.messagesSent,
+                    botsTotal: data.stats.botsTotal ?? stats.botsTotal,
+                    botsActive: data.stats.botsActive ?? stats.botsActive,
+                    botsDeleted: data.stats.botsDeleted ?? stats.botsDeleted,
+                    botsOffline: data.stats.botsOffline ?? stats.botsOffline
                 });
+                setLastSync(new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+                setHasFetched(true);
             }
         } catch (err) {
             console.error("Failed to fetch logs:", err);
@@ -49,20 +64,6 @@ export default function ActivityLogsPage() {
             setLoading(false);
         }
     };
-
-    useEffect(() => {
-        fetchLogs();
-    }, []);
-
-    useEffect(() => {
-        let interval: NodeJS.Timeout;
-        if (liveStream) {
-            interval = setInterval(() => {
-                fetchLogs();
-            }, 10000);
-        }
-        return () => clearInterval(interval);
-    }, [liveStream]);
 
     return (
         <div className="space-y-8 pb-12">
@@ -86,47 +87,45 @@ export default function ActivityLogsPage() {
             {/* Live Feed Toggle & Filters */}
             <div className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex flex-wrap items-center justify-between gap-6">
                 <div className="flex items-center gap-6">
-                    <div className="flex items-center gap-3">
-                        <button
-                            onClick={() => setLiveStream(!liveStream)}
-                            className={`w-12 h-6 rounded-full relative transition-all ${liveStream ? 'bg-emerald-500' : 'bg-slate-200'}`}
-                        >
-                            <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${liveStream ? 'right-1' : 'left-1'}`}></div>
-                        </button>
-                        <span className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
-                            {liveStream ? (
-                                <>
-                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                    Live Stream Active
-                                </>
-                            ) : 'Feed Paused'}
+                    <button
+                        onClick={fetchLogs}
+                        disabled={loading}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-black uppercase tracking-widest shadow-lg shadow-indigo-500/30 hover:bg-indigo-700 hover:shadow-indigo-500/50 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:hover:translate-y-0"
+                    >
+                        <RotateCw size={16} className={loading ? 'animate-spin' : ''} />
+                        {loading ? 'Syncing...' : 'Sync Dashboard'}
+                    </button>
+                    {lastSync && (
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+                            Last Sync: {lastSync}
                         </span>
-                    </div>
-
-                    <div className="h-8 w-[1px] bg-slate-100 hidden md:block"></div>
-
-                    <div className="flex items-center gap-3">
-                        <button className="p-2.5 rounded-xl border border-slate-100 text-slate-400 hover:text-indigo-600 transition-all">
-                            <Filter size={18} />
-                        </button>
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
-                            <input
-                                type="text"
-                                placeholder="Search by user or IP..."
-                                className="pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-4 focus:ring-indigo-500/10 w-64"
-                            />
-                        </div>
-                    </div>
+                    )}
                 </div>
 
-                <div className="flex items-center gap-1">
-                    {["All", "Errors", "Auth", "System", "Billing"].map((cat) => (
-                        <button key={cat} className="px-4 py-1.5 text-[10px] font-black uppercase text-slate-400 hover:text-indigo-600 transition-all">
-                            {cat}
-                        </button>
-                    ))}
+                <div className="h-8 w-[1px] bg-slate-100 hidden md:block"></div>
+
+                <div className="flex items-center gap-3">
+                    <button className="p-2.5 rounded-xl border border-slate-100 text-slate-400 hover:text-indigo-600 transition-all">
+                        <Filter size={18} />
+                    </button>
+                    <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-300" size={16} />
+                        <input
+                            type="text"
+                            placeholder="Search by user or IP..."
+                            className="pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:outline-none focus:ring-4 focus:ring-indigo-500/10 w-64"
+                        />
+                    </div>
                 </div>
+            </div>
+
+            <div className="flex items-center gap-1">
+                {["All", "Errors", "Auth", "System", "Billing"].map((cat) => (
+                    <button key={cat} className="px-4 py-1.5 text-[10px] font-black uppercase text-slate-400 hover:text-indigo-600 transition-all">
+                        {cat}
+                    </button>
+                ))}
             </div>
 
             {/* Log Table */}
@@ -187,7 +186,7 @@ export default function ActivityLogsPage() {
                             )) : (
                                 <tr>
                                     <td colSpan={5} className="px-8 py-12 text-center text-slate-500 italic uppercase text-[10px] font-black tracking-widest">
-                                        No real system audit logs found. System is currently quiet.
+                                        {!hasFetched ? "Dashboard is in Ultra-Budget Mode. Click 'Sync Dashboard' to fetch real data safely." : "No real system audit logs found. System is currently quiet."}
                                     </td>
                                 </tr>
                             )}
@@ -197,7 +196,7 @@ export default function ActivityLogsPage() {
 
                 <div className="p-8 border-t border-slate-800 flex items-center justify-between">
                     <button onClick={fetchLogs} className="flex items-center gap-2 text-slate-500 hover:text-slate-300 transition-all font-black uppercase tracking-widest text-[10px]">
-                        <RotateCw size={14} className={loading ? 'animate-spin' : liveStream ? 'animate-spin-slow' : ''} />
+                        <RotateCw size={14} className={loading ? 'animate-spin' : ''} />
                         Fetch Previous 100 Logs
                     </button>
                     <div className="flex items-center gap-1">
@@ -211,37 +210,46 @@ export default function ActivityLogsPage() {
                 </div>
             </div>
 
-            {/* Log Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div className="p-6 rounded-[32px] border border-slate-100 bg-white shadow-sm">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Logs (24h)</p>
+            {/* Log Stats grid */}
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                <div className="p-5 rounded-[24px] border border-slate-100 bg-white shadow-sm hover:shadow-md transition-shadow">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Action Logs (24h)</p>
                     <div className="flex items-baseline gap-2">
-                        <span className="text-2xl font-black text-slate-900 font-outfit">{stats.logs24h.toLocaleString()}</span>
-                        <span className="text-xs font-bold text-emerald-500 flex items-center gap-0.5">
-                            <ArrowUpRight size={12} />
-                            4.2%
+                        <span className="text-xl font-black text-slate-900 font-outfit">{stats.logs24h.toLocaleString()}</span>
+                    </div>
+                </div>
+                <div className="p-5 rounded-[24px] border border-slate-100 bg-white shadow-sm hover:shadow-md transition-shadow">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">System Errors</p>
+                    <div className="flex items-baseline gap-2">
+                        <span className="text-xl font-black text-rose-600 font-outfit">{stats.alerts.toLocaleString()}</span>
+                    </div>
+                </div>
+                <div className="p-5 rounded-[24px] border border-slate-100 bg-white shadow-sm hover:shadow-md transition-shadow">
+                    <p className="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-1.5">Total Messages</p>
+                    <div className="flex items-baseline gap-2">
+                        <span className="text-xl font-black text-slate-900 font-outfit">{stats.messagesSent.toLocaleString()}</span>
+                    </div>
+                </div>
+                <div className="p-5 rounded-[24px] border border-slate-100 bg-white shadow-sm hover:shadow-md transition-shadow">
+                    <p className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-1.5">Total Bots Created</p>
+                    <div className="flex items-baseline gap-2">
+                        <span className="text-xl font-black text-slate-900 font-outfit">{stats.botsTotal.toLocaleString()}</span>
+                    </div>
+                </div>
+                <div className="p-5 rounded-[24px] border border-slate-100 bg-white shadow-sm hover:shadow-md transition-shadow relative overflow-hidden group">
+                    <div className="absolute inset-0 bg-emerald-500/5 group-hover:bg-emerald-500/10 transition-colors"></div>
+                    <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-1.5 relative z-10">Active Bots</p>
+                    <div className="flex items-baseline gap-2 relative z-10">
+                        <span className="text-xl font-black text-emerald-600 font-outfit">{stats.botsActive.toLocaleString()}</span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    </div>
+                </div>
+                <div className="p-5 rounded-[24px] border border-slate-100 bg-white shadow-sm hover:shadow-md transition-shadow">
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5">Deleted / Offline</p>
+                    <div className="flex items-baseline gap-2">
+                        <span className="text-xl font-black text-slate-500 font-outfit">
+                            {stats.botsDeleted.toLocaleString()} <span className="text-sm">/ {stats.botsOffline.toLocaleString()}</span>
                         </span>
-                    </div>
-                </div>
-                <div className="p-6 rounded-[32px] border border-slate-100 bg-white shadow-sm">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Security Alerts</p>
-                    <div className="flex items-baseline gap-2">
-                        <span className="text-2xl font-black text-rose-600 font-outfit">{stats.alerts}</span>
-                        <span className="text-xs font-bold text-slate-300 uppercase italic tracking-tighter ml-1">Requires Action</span>
-                    </div>
-                </div>
-                <div className="p-6 rounded-[32px] border border-slate-100 bg-white shadow-sm">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">DB Queries / sec</p>
-                    <div className="flex items-baseline gap-2">
-                        <span className="text-2xl font-black text-slate-900 font-outfit">{stats.queriesPerSec}</span>
-                        <Database size={16} className="text-indigo-200" />
-                    </div>
-                </div>
-                <div className="p-6 rounded-[32px] border border-slate-100 bg-white shadow-sm">
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">System Uptime</p>
-                    <div className="flex items-baseline gap-2">
-                        <span className="text-2xl font-black text-emerald-600 font-outfit">{stats.uptime}</span>
-                        <Zap size={16} className="text-emerald-200" fill="currentColor" />
                     </div>
                 </div>
             </div>

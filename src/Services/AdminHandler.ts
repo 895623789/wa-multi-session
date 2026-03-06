@@ -9,6 +9,7 @@ export interface SystemStats {
     activeSessions: string[];
     pendingMessages: number;
     sentMessages: number;
+    agentNames?: Record<string, string>;
 }
 
 export interface FileAttachment {
@@ -25,29 +26,80 @@ export interface AgentReply {
     storageFileName?: string;       // File name for storage prompt
 }
 
+export interface AdminCallbacks {
+    sendWhatsapp?: (sessionId: string, to: string, message: string) => Promise<void>;
+    setBotStatus?: (sessionId: string, isActive: boolean) => Promise<void>;
+    getChatHistory?: (sessionId: string, remoteJid: string) => Promise<any[]>;
+    scheduleTask?: (type: string, time: string, data: any) => Promise<void>;
+}
+
 // ─── Function Declarations (Tools for Gemini) ─────────────────────────────────
 const tools: FunctionDeclaration[] = [
     {
         name: 'sendWhatsappMessage',
-        description: 'Send a WhatsApp text message to a phone number using a connected session. Use this when the user asks to send a message to someone via WhatsApp.',
+        description: 'Sends a WhatsApp text message to one or more recipients. Use this ONLY when the user provides all necessary details: recipient(s), the message content, and which bot/session to use. If any part is missing, ASK the user first.',
         parameters: {
             type: SchemaType.OBJECT,
             properties: {
                 sessionId: {
                     type: SchemaType.STRING,
-                    description: 'The session ID to send from. If the user does not specify, use the first available active session.'
+                    description: 'The session ID (ID string) to send from. Must be one of the active session IDs provided in the context.'
                 },
                 to: {
                     type: SchemaType.ARRAY,
-                    description: 'The recipient phone numbers in international format, e.g. ["919876543210"] (country code + number, no +). Can be multiple if asked to send to multiple people.',
+                    description: 'The recipient phone numbers in international format (e.g. ["919876543210"]).',
                     items: { type: SchemaType.STRING }
                 },
                 message: {
                     type: SchemaType.STRING,
-                    description: 'The text message to send'
+                    description: 'The exact text message to send.'
                 }
             },
             required: ['sessionId', 'to', 'message']
+        }
+    },
+    {
+        name: 'setBotStatus',
+        description: 'Turn a specific bot ON or OFF to temporarily pause or resume its auto-replies.',
+        parameters: {
+            type: SchemaType.OBJECT,
+            properties: {
+                sessionId: { type: SchemaType.STRING, description: 'The session ID of the bot' },
+                isActive: { type: SchemaType.BOOLEAN, description: 'True to turn ON (resume), False to turn OFF (pause)' }
+            },
+            required: ['sessionId', 'isActive']
+        }
+    },
+    {
+        name: 'getChatHistory',
+        description: 'Fetch the recent message history for a specific customer on a specific bot to analyze their interest.',
+        parameters: {
+            type: SchemaType.OBJECT,
+            properties: {
+                sessionId: { type: SchemaType.STRING, description: 'The session ID of the bot' },
+                remoteJid: { type: SchemaType.STRING, description: 'The customer phone number without symbols, e.g., 919876543210' }
+            },
+            required: ['sessionId', 'remoteJid']
+        }
+    },
+    {
+        name: 'scheduleTask',
+        description: 'Schedule a future task, such as a follow-up message to a customer or a reminder for the owner.',
+        parameters: {
+            type: SchemaType.OBJECT,
+            properties: {
+                type: { type: SchemaType.STRING, description: "Type of task: 'message' (to customer) or 'reminder' (to owner)" },
+                time: { type: SchemaType.STRING, description: "ISO target time or relative description, e.g., '2026-03-05T06:00:00Z', 'in 2 hours'" },
+                data: {
+                    type: SchemaType.OBJECT,
+                    description: "For message: { numbers: ['91...'], text: 'Hello' }. For reminder: { text: 'Remind me to...' }",
+                    properties: {
+                        text: { type: SchemaType.STRING },
+                        numbers: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } }
+                    }
+                }
+            },
+            required: ['type', 'time', 'data']
         }
     },
     {
@@ -85,34 +137,40 @@ export async function generateAdminReply(
     query: string,
     stats: SystemStats,
     file?: FileAttachment,
-    sendWhatsappFn?: (sessionId: string, to: string, message: string) => Promise<void>,
+    callbacks?: AdminCallbacks,
     history?: any[]
 ): Promise<AgentReply> {
     try {
+        const botNamesContext = stats.agentNames
+            ? Object.entries(stats.agentNames).map(([id, name]) => `- **${name}** (ID: ${id})`).join('\n')
+            : 'None';
+
         const model = genAI.getGenerativeModel({
-            model: 'gemini-2.5-flash',
-            systemInstruction: `You are the BulkReply.io AI Agent — a powerful multimodal assistant for the business owner's dashboard.
+            model: 'gemini-2.0-flash',
+            systemInstruction: `You are the BulkReply.io AI Agent — a powerful multimodal assistant.
 
 CURRENT SYSTEM STATE:
-- Active WhatsApp Sessions: ${stats.activeSessions.join(', ') || 'None'}
+- Active Bots (Names & IDs):
+${botNamesContext}
 - Messages Pending in Queue: ${stats.pendingMessages}
 - Total Messages Sent: ${stats.sentMessages}
 
 YOUR CAPABILITIES:
-1. VISION: If a photo/image is shared, you can see and analyze it in detail.
-2. AUDIO: If an audio file is shared, you can transcribe and understand it.
-3. PDF: If a PDF is shared, you can read and summarize its contents.
-4. SEND WHATSAPP: You can send WhatsApp messages on behalf of the owner. Use the sendWhatsappMessage tool.
-5. GENERATE IMAGES: If the user asks to create/draw/generate an image, use the generateImage tool.
-6. SMART STORAGE: If a file seems important enough to keep permanently, you may ask the user (do NOT auto-save).
+1. VISION: Analyze shared photos/images.
+2. AUDIO: Transcribe and understand audio files.
+3. PDF: Read and summarize document contents.
+4. SEND WHATSAPP: Send messages on behalf of the owner. **CRITICAL**: Before calling 'sendWhatsappMessage', ensure you have: (A) The numbers, (B) The message, and (C) The specific bot to use. If any of these are missing, DO NOT call the tool; instead, ASK the user for the missing details.
+5. GENERATE IMAGES: Use 'generateImage' for image creation requests.
+6. BOT CONTROL: Turn bots ON or OFF using 'setBotStatus'.
+7. HISTORY INSPECTION: Read a customer's recent chats using 'getChatHistory' to see if they are interested or what they asked.
+8. AUTOMATION: Use 'scheduleTask' to schedule follow-up messages or internal reminders.
 
 RULES:
-- Be professional, efficient, concise.
-- For WhatsApp number format: add country code 91 for Indian numbers if not present.
+- Address the user as an Operations Manager. You are in control of all WhatsApp bots and automation.
+- **IMPORTANT**: Always refer to bots by their NAMES (the bolded names in the context) to make it easier for the user. If they ask "Which bots are active?", list them by name.
+- For WhatsApp numbers: ensure 91 prefix for Indian numbers.
 - Use Hinglish if the user does, otherwise English.
-- Never hallucinate system data. Use bold for key metrics.
-- If user sends a file without a question, proactively describe/analyze it.
-- For storage: NEVER save automatically. If the file looks important, suggest saving and ask. Do not call saveToFirebaseStorage unless user explicitly confirms.`,
+- Proactively suggest analyzing customer chats or scheduling follow-ups to close sales.`,
         });
 
         // Convert history format if provided
@@ -160,8 +218,61 @@ RULES:
         if (functionCalls && functionCalls.length > 0) {
             const fc = functionCalls[0].functionCall!;
 
+            // ── getChatHistory ───────────────────────────────────────────
+            if (fc.name === 'getChatHistory' && callbacks?.getChatHistory) {
+                const args = fc.args as { sessionId: string; remoteJid: string };
+                try {
+                    const logs = await callbacks.getChatHistory(args.sessionId, args.remoteJid);
+
+                    // Add tool request to history state
+                    formattedHistory.push({
+                        role: 'model',
+                        parts: [{ functionCall: { name: fc.name, args: fc.args } }]
+                    });
+
+                    // Add simulation of function response
+                    formattedHistory.push({
+                        role: 'user',
+                        parts: [{ text: `[SYSTEM NOTE: Function call returned: ${JSON.stringify(logs)}]\nNow answer my original prompt using this data.` }]
+                    });
+
+                    // Call model again with the newly injected data
+                    const multiResult = await model.generateContent({
+                        contents: formattedHistory,
+                        tools: [{ functionDeclarations: tools }]
+                    });
+
+                    const multiText = multiResult.response.candidates?.[0]?.content?.parts?.filter(p => p.text).map(p => p.text).join('') || "Analyzed history.";
+                    return { text: multiText };
+                } catch (err: any) {
+                    return { text: `❌ Failed to fetch history: ${err.message}` };
+                }
+            }
+
+            // ── setBotStatus ─────────────────────────────────────────────
+            if (fc.name === 'setBotStatus' && callbacks?.setBotStatus) {
+                const args = fc.args as { sessionId: string; isActive: boolean };
+                try {
+                    await callbacks.setBotStatus(args.sessionId, args.isActive);
+                    return { text: `✅ Bot status successfully updated.\n\n**Bot ID:** ${args.sessionId}\n**Status:** ${args.isActive ? 'ON' : 'OFF'}` };
+                } catch (err: any) {
+                    return { text: `❌ Failed to update bot status: ${err.message}` };
+                }
+            }
+
+            // ── scheduleTask ─────────────────────────────────────────────
+            if (fc.name === 'scheduleTask' && callbacks?.scheduleTask) {
+                const args = fc.args as { type: string; time: string; data: any };
+                try {
+                    await callbacks.scheduleTask(args.type, args.time, args.data);
+                    return { text: `⏰ Task successfully scheduled.\n\n**Type:** ${args.type}\n**Time:** ${new Date(args.time).toLocaleString()}` };
+                } catch (err: any) {
+                    return { text: `❌ Failed to schedule task: ${err.message}` };
+                }
+            }
+
             // ── sendWhatsappMessage ──────────────────────────────────────
-            if (fc.name === 'sendWhatsappMessage' && sendWhatsappFn) {
+            if (fc.name === 'sendWhatsappMessage' && callbacks?.sendWhatsapp) {
                 const args = fc.args as { sessionId: string; to: string[]; message: string };
 
                 try {
@@ -170,7 +281,7 @@ RULES:
 
                     for (const rawNumber of targets) {
                         const to = rawNumber.includes('@') ? rawNumber : `${rawNumber}@s.whatsapp.net`;
-                        await sendWhatsappFn(args.sessionId, to, args.message);
+                        await callbacks.sendWhatsapp(args.sessionId, to, args.message);
                         sentCount++;
                     }
 

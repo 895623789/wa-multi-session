@@ -4,6 +4,9 @@ import { BrainCircuit, Send, User, Sparkles, Paperclip, X, Image as ImageIcon, F
 import ReactMarkdown from 'react-markdown';
 import Link from "next/link";
 import { v4 as uuidv4 } from "uuid";
+import { db } from "@/lib/firebase";
+import { useAuth } from "@/components/AuthProvider";
+import { collection, getDocs } from "firebase/firestore";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Message {
@@ -105,6 +108,8 @@ export default function NeuralAdminPage() {
     const [showHistory, setShowHistory] = useState(false);
     const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
     const [editTitleText, setEditTitleText] = useState("");
+    const [agentNames, setAgentNames] = useState<Record<string, string>>({});
+    const { user } = useAuth();
 
     const scrollRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -129,6 +134,26 @@ export default function NeuralAdminPage() {
             startNewChat();
         }
     }, []);
+
+    // Fetch Agent Names
+    useEffect(() => {
+        const fetchNames = async () => {
+            if (!user?.uid) return;
+            try {
+                const agentsRef = collection(db, "users", user.uid, "agents");
+                const agentsSnap = await getDocs(agentsRef);
+                const nameMap: Record<string, string> = {};
+                agentsSnap.forEach(doc => {
+                    const data = doc.data();
+                    nameMap[doc.id] = data.name || "Unnamed Bot";
+                });
+                setAgentNames(nameMap);
+            } catch (err) {
+                console.error("Failed to fetch agent names:", err);
+            }
+        };
+        fetchNames();
+    }, [user?.uid]);
 
     const saveStateToLocal = (id: string, msgs: Message[], titleFallback: string) => {
         setSessions(prev => {
@@ -269,6 +294,7 @@ export default function NeuralAdminPage() {
             if (chatHistory.length > 0) {
                 formData.append('history', JSON.stringify(chatHistory));
             }
+            formData.append('agentNames', JSON.stringify(agentNames));
 
             const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
             const res = await fetch(`${baseUrl}/admin/chat`, { method: "POST", body: formData });

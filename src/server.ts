@@ -7,6 +7,8 @@ import { generateAutoReply, generateOutreach, generateImageFromPrompt } from "./
 import { generateAdminReply } from "./Services/AdminHandler";
 import { MessageQueue } from "./Services/MessageQueue";
 import { downloadMediaMessage } from "baileys";
+import { TaskScheduler } from "./Services/TaskScheduler";
+import { getFirestore } from "firebase-admin/firestore";
 
 // Multer: store uploads in memory (no disk, no Firebase by default)
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -106,7 +108,7 @@ const checkApiQuota = async (req: express.Request, res: express.Response, next: 
     const today = new Date().toISOString().split('T')[0];
     const usageRef = db.collection('users').doc(uid).collection('usage').doc(today);
 
-    await db.runTransaction(async (t) => {
+    await db.runTransaction(async (t: any) => {
       const doc = await t.get(usageRef);
       const currentCount = doc.exists ? doc.data()?.apiCount || 0 : 0;
 
@@ -127,20 +129,78 @@ const checkApiQuota = async (req: express.Request, res: express.Response, next: 
       });
     }
     console.error("Quota Transaction Error:", error);
-    next(); // Fail open for safety, or return 500
+    next();
   }
 };
 
-// --- SaaS Subscription Logic ---
-import { getFirestore } from "firebase-admin/firestore";
+/**
+ * Tracks and enforces daily message limits (AI replies & Campaigns)
+ */
+async function checkMsgQuota(uid: string, limit: number): Promise<boolean> {
+  if (!uid || limit === 0) return false;
+  if (typeof limit !== 'number' || limit > 100000) return true; // Fail safe for "Unlimited"
 
-type PlanTier = 'personal' | 'starter' | 'pro' | 'custom';
-const PLAN_LIMITS: Record<PlanTier, { maxPA: number, maxBots: number, allowApi: boolean, allowCampaigns: boolean, dailyApiQuota: number }> = {
-  personal: { maxPA: 1, maxBots: 0, allowApi: false, allowCampaigns: false, dailyApiQuota: 0 },
-  starter: { maxPA: 2, maxBots: 3, allowApi: false, allowCampaigns: true, dailyApiQuota: 25 },
-  pro: { maxPA: 10, maxBots: 15, allowApi: true, allowCampaigns: true, dailyApiQuota: 25 },
-  custom: { maxPA: 100, maxBots: 100, allowApi: true, allowCampaigns: true, dailyApiQuota: 9999 }
-};
+  try {
+    const db = getFirestore();
+    const today = new Date().toISOString().split('T')[0];
+    const usageRef = db.collection('users').doc(uid).collection('usage').doc(today);
+
+    let allowed = true;
+    await db.runTransaction(async (t: any) => {
+      const doc = await t.get(usageRef);
+      const currentCount = doc.exists ? doc.data()?.msgCount || 0 : 0;
+
+      if (currentCount >= limit) {
+        allowed = false;
+        return;
+      }
+
+      t.set(usageRef, { msgCount: currentCount + 1 }, { merge: true });
+    });
+
+    return allowed;
+  } catch (err) {
+    console.error("Msg Quota Error:", err);
+    return true; // Fail open
+  }
+}
+
+// --- SaaS Dynamic Subscription Logic ---
+const plansCache = new Map<string, any>();
+const PLAN_CACHE_TTL = 10 * 60 * 1000; // 10 minutes cache
+let lastPlanFetch = 0;
+
+async function getPlanLimits(planId: string): Promise<any> {
+  const now = Date.now();
+  // Fetch/Refresh all plans if cache is old or planId not found
+  if (now - lastPlanFetch > PLAN_CACHE_TTL || !plansCache.has(planId)) {
+    try {
+      const db = getFirestore();
+      const snap = await db.collection('plans').get();
+      snap.docs.forEach((doc: any) => {
+        plansCache.set(doc.id, doc.data());
+      });
+      lastPlanFetch = now;
+      console.log(`🔄 Plans Cache Refreshed (${snap.size} plans)`);
+    } catch (err) {
+      console.error("Failed to refresh plans cache:", err);
+    }
+  }
+
+  const rawPlan = plansCache.get(planId);
+  if (!rawPlan) return null;
+
+  // Adapt frontend-style limits to backend-style limits
+  return {
+    maxPA: typeof rawPlan.limits?.agents === 'string' ? 999 : (rawPlan.limits?.agents || 1),
+    maxBots: typeof rawPlan.limits?.agents === 'string' ? 999 : (rawPlan.limits?.agents || 1),
+    allowApi: rawPlan.limits?.apiAccess || false,
+    allowCampaigns: rawPlan.limits?.aiReply || false,
+    dailyApiQuota: parseInt(rawPlan.limits?.apiFreeCredits) || 0,
+    costPerReq: parseInt(rawPlan.limits?.apiCostPerReq) || 0,
+    maxMsgsPerDay: rawPlan.limits?.maxMsgsPerDay || 0
+  };
+}
 
 const checkSubscription = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   let uid = req.body.uid || req.query.uid;
@@ -175,7 +235,7 @@ const checkSubscription = async (req: express.Request, res: express.Response, ne
 
     // Agency owners and platform admins bypass subscription checks (global)
     if (data?.role === 'agency' || data?.role === 'admin' || data?.owner === true) {
-      (req as any).userPlan = PLAN_LIMITS['custom']; // Grant full access
+      (req as any).userPlan = await getPlanLimits('custom') || { maxPA: 999, maxBots: 999, allowApi: true, dailyApiQuota: 9999 };
       return next();
     }
 
@@ -187,12 +247,20 @@ const checkSubscription = async (req: express.Request, res: express.Response, ne
 
     const expiresAt = sub.expiresAt.toDate();
     if (new Date() > expiresAt) {
+      // Invalidate AI Reply cache for this user immediately
+      subCache.delete(uid);
       return res.status(402).json({ error: "Subscription expired", code: "SUBSCRIPTION_EXPIRED" });
     }
 
-    const plan: PlanTier = sub.plan || 'personal';
-    const limits = PLAN_LIMITS[plan];
-    (req as any).userPlan = limits; // Inject plan limits into request for downstream routes
+    const planId: string = sub.plan || 'personal';
+    const limits = await getPlanLimits(planId);
+
+    if (!limits) {
+      // Fallback if plan doesn't exist in DB
+      (req as any).userPlan = { maxPA: 1, maxBots: 0, allowApi: false, dailyApiQuota: 0 };
+    } else {
+      (req as any).userPlan = limits;
+    }
 
     // Check session limits (only for start session endpoints)
     if (req.path.includes('/session/start')) {
@@ -215,14 +283,14 @@ const checkSubscription = async (req: express.Request, res: express.Response, ne
       if (isPA) {
         if (currentPaCount >= limits.maxPA) {
           return res.status(402).json({
-            error: `Personal Assistant limit reached. Your ${plan} plan allows max ${limits.maxPA} assistant(s).`,
+            error: `Personal Assistant limit reached. Your ${planId} plan allows max ${limits.maxPA} assistant(s).`,
             code: "LIMIT_REACHED"
           });
         }
       } else {
         if (currentBotCount >= limits.maxBots) {
           return res.status(402).json({
-            error: `Business Bot limit reached. Your ${plan} plan allows max ${limits.maxBots} bot(s).`,
+            error: `Business Bot limit reached. Your ${planId} plan allows max ${limits.maxBots} bot(s).`,
             code: "LIMIT_REACHED"
           });
         }
@@ -459,6 +527,12 @@ Please summarize this for me and suggest a reply based on our business profile a
             const isExpired = sub?.expiresAt ? (new Date() > sub.expiresAt.toDate()) : false;
             if (!sub || sub.status !== 'active' || isExpired) {
               allowed = false;
+            } else {
+              // Also check if the PLAN itself allows AI Reply
+              const planLimits = await getPlanLimits(sub.plan || 'personal');
+              if (planLimits && !planLimits.allowCampaigns) {
+                allowed = false;
+              }
             }
           }
         }
@@ -466,7 +540,7 @@ Please summarize this for me and suggest a reply based on our business profile a
         // Cache for 5 minutes
         subCache.set(uidFromSession, { allowed, expiresAt: now + 5 * 60 * 1000 });
         if (!allowed) {
-          console.warn(`⚠️ [${msg.sessionId}] AI Reply blocked: Subscription missing/expired for UID [${uidFromSession}].`);
+          console.warn(`⚠️ [${msg.sessionId}] AI Reply blocked: Subscription missing/expired/disabled for UID [${uidFromSession}].`);
           return;
         }
       }
@@ -586,6 +660,21 @@ Please summarize this for me and suggest a reply based on our business profile a
     ]);
 
     const currentTime = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+
+    const uidFromSession = msg.sessionId.split('_')[0];
+    const planLimits = await getPlanLimits(uidFromSession);
+    const maxMsgs = planLimits?.maxMsgsPerDay || 0;
+    const canSend = await checkMsgQuota(uidFromSession, maxMsgs);
+
+    if (!canSend) {
+      console.warn(`🛑 [${msg.sessionId}] Daily Message Limit Reached (${maxMsgs}). Blocking reply.`);
+      whatsapp.sendText({
+        sessionId: msg.sessionId,
+        to: ownerNumber || remoteJid,
+        text: `⚠️ *Quota Alert:* Your daily message limit of ${maxMsgs} has been reached. Please upgrade your plan for more capacity.`
+      }).catch(() => { });
+      return;
+    }
 
     const aiResult = await generateAutoReply(
       text,
@@ -828,7 +917,7 @@ app.post("/bot/delete", async (req: any, res) => {
     for (const col of collections) {
       const snap = await db.collection(col).where('sessionId', '==', sessionId).get();
       const batch = db.batch();
-      snap.docs.forEach(d => batch.delete(d.ref));
+      snap.docs.forEach((d: any) => batch.delete(d.ref));
       if (!snap.empty) await batch.commit();
     }
     // Also delete the specific session doc
@@ -1218,9 +1307,29 @@ app.post("/admin/chat", upload.single('file'), async (req: any, res) => {
       };
     }
 
-    // WhatsApp send function for AI function calling
-    const sendWhatsappFn = async (sessionId: string, to: string, message: string) => {
-      await whatsapp.sendText({ sessionId, to, text: message });
+    const callbacks = {
+      sendWhatsapp: async (sessionId: string, to: string, message: string) => {
+        await whatsapp.sendText({ sessionId, to, text: message });
+      },
+      setBotStatus: async (sessionId: string, isActive: boolean) => {
+        await (whatsapp as any).adapter.writeData(sessionId, 'isActive', 'config', isActive ? 'true' : 'false');
+      },
+      getChatHistory: async (sessionId: string, remoteJid: string) => {
+        return [{ text: "Chat history API is currently limited. User is actively conversing with the bot on WhatsApp." }];
+      },
+      scheduleTask: async (type: string, time: string, data: any) => {
+        const { getFirestore } = await import('firebase-admin/firestore');
+        const db = getFirestore();
+        await db.collection('scheduled_tasks').add({
+          sessionId: "system",
+          ownerNumber: "",
+          type,
+          time,
+          data,
+          status: 'pending',
+          createdAt: new Date().toISOString()
+        });
+      }
     };
 
     // Parse chat history if provided
@@ -1233,11 +1342,21 @@ app.post("/admin/chat", upload.single('file'), async (req: any, res) => {
       }
     }
 
+    // Parse agent names mapping if provided
+    let agentNames = {};
+    if (req.body?.agentNames) {
+      try {
+        agentNames = JSON.parse(req.body.agentNames);
+      } catch (e) {
+        console.warn("Invalid JSON for agent names", e);
+      }
+    }
+
     const agentReply = await generateAdminReply(
       query,
-      { activeSessions: sessions, pendingMessages: queueStats.pending, sentMessages: queueStats.sent },
+      { activeSessions: sessions, pendingMessages: queueStats.pending, sentMessages: queueStats.sent, agentNames },
       fileAttachment,
-      sendWhatsappFn,
+      callbacks,
       history
     );
 
@@ -1381,6 +1500,11 @@ async function autoConnectActiveAgents() {
   }
 }
 
+// --- STATS CACHE (Memory Optimization) ---
+let cachedStats: any = null;
+let lastStatsFetchTime = 0;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 /**
  * Get System Activity Logs (Owner/Admin)
  * GET http://localhost:5000/owner/logs
@@ -1391,26 +1515,45 @@ app.get("/owner/logs", async (req, res) => {
     const now = Date.now();
     const oneDayAgo = new Date(now - 24 * 60 * 60 * 1000).toISOString();
 
+    // 1. Fetch recent 50 logs (Smarter limit for cost saving)
     const logsSnap = await db.collection('activity_logs')
       .orderBy('time', 'desc')
-      .limit(100)
+      .limit(50)
       .get();
 
-    // Firestore requires composite index for where + orderBy on different fields.
-    // To avoid index creation errors for this simple feature, we will count alerts and 24h manually if needed, 
-    // or just use separate simple queries. Let's do simple queries without orderBy for stats.
+    // 2. Fetch Stats with Cache (Avoids daily reads)
+    if (!cachedStats || (now - lastStatsFetchTime) > CACHE_TTL) {
+      console.log("📊 Refreshing Stats Cache from Firestore...");
+      const recentLogsSnap = await db.collection('activity_logs')
+        .where('time', '>=', oneDayAgo)
+        .get();
 
-    // We can just rely on the recent 100 logs for the mock dashboard stats for now,
-    // or run a count if Firebase Admin SDK supports it without index.
-    const recentLogsSnap = await db.collection('activity_logs')
-      .where('time', '>=', oneDayAgo)
-      .get();
+      const alertsSnap = await db.collection('activity_logs')
+        .where('level', 'in', ['Critical', 'Warning', 'Error'])
+        .get();
 
-    const alertsSnap = await db.collection('activity_logs')
-      .where('level', 'in', ['Critical', 'Warning', 'Error'])
-      .get();
+      // Advanced Stats
+      const messagesSnap = await db.collection("message_queue").where("status", "==", "sent").count().get();
+      const agentsTotalSnap = await db.collectionGroup("agents").count().get();
+      const agentsDeletedSnap = await db.collectionGroup("agents").where("deleted", "==", true).count().get();
 
-    let logs = logsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      const activeBots = Array.from(sessionStatuses.values()).filter(s => s.status === 'connected').length;
+      const totalCreated = agentsTotalSnap.data().count;
+      const deletedBots = agentsDeletedSnap.data().count;
+
+      cachedStats = {
+        logs24h: recentLogsSnap.size,
+        alerts: alertsSnap.size,
+        messagesSent: messagesSnap.data().count,
+        botsTotal: totalCreated,
+        botsActive: activeBots,
+        botsDeleted: deletedBots,
+        botsOffline: Math.max(0, totalCreated - deletedBots - activeBots)
+      };
+      lastStatsFetchTime = now;
+    }
+
+    let logs = logsSnap.docs.map((doc: any) => ({ id: doc.id, ...doc.data() }));
 
     const formattedLogs = logs.map((log: any) => {
       const d = new Date(log.time);
@@ -1420,12 +1563,7 @@ app.get("/owner/logs", async (req, res) => {
 
     res.json({
       logs: formattedLogs,
-      stats: {
-        logs24h: recentLogsSnap.size || 0,
-        alerts: alertsSnap.size || 0,
-        queriesPerSec: 0, // Placeholder for real health monitoring if available
-        uptime: "100%"
-      }
+      stats: cachedStats
     });
 
   } catch (error: any) {
@@ -1453,108 +1591,8 @@ app.listen(port, () => {
  * Runs every 60 seconds. Handles: messages, reminders, repeating tasks.
  */
 function startTaskScheduler() {
-  console.log("⏳ Task Scheduler started. Polling every 60s for scheduled tasks...");
-  setInterval(async () => {
-    const db = getFirestore();
-    const now = new Date().toISOString();
-
-    try {
-      // NOTE: Using single .where() to avoid composite index requirement.
-      // We filter by time in JavaScript below.
-      const tasksSnap = await db.collection('scheduled_tasks')
-        .where('status', '==', 'pending')
-        .get();
-
-      // Filter locally to those whose time has arrived
-      const dueTasks = tasksSnap.docs.filter(d => {
-        const t = d.data().time;
-        return t && t <= now;
-      });
-
-      if (dueTasks.length === 0) return;
-
-      console.log(`🔔 Scheduler: ${dueTasks.length} tasks due.`);
-
-      for (const doc of dueTasks) {
-        const task = doc.data();
-        const taskId = doc.id;
-        const retryCount = task.retryCount || 0;
-        const MAX_RETRIES = 3;
-
-        // Immediately lock the task to prevent double-execution
-        await doc.ref.update({ status: 'processing' });
-
-        try {
-          // ── Execute based on type ─────────────────────────
-          if (task.type === 'message' && task.data?.numbers?.length > 0) {
-            // Send message to a list of contacts
-            for (const num of task.data.numbers) {
-              const cleanNum = num.replace(/[^\d]/g, "");
-              if (cleanNum.length > 5) {
-                await queue.push(task.sessionId, cleanNum, task.data.text || "", task.data.media);
-              }
-            }
-          } else if (task.type === 'reminder') {
-            // Remind the owner
-            await whatsapp.sendText({
-              sessionId: task.sessionId,
-              to: task.ownerNumber,
-              text: `⏰ *REMINDER* 🔔\n\n${task.data?.text || "No details provided."}\n\n_Scheduled by your AI Assistant_`
-            });
-          } else if (task.type === 'broadcast') {
-            // Broadcast a single message to multiple numbers
-            const numbers: string[] = task.data?.numbers || [];
-            for (const num of numbers) {
-              const cleanNum = num.replace(/[^\d]/g, "");
-              if (cleanNum.length > 5) {
-                await queue.push(task.sessionId, cleanNum, task.data.text || "", task.data.media);
-              }
-            }
-          }
-
-          // ── Handle Repeating Tasks ────────────────────────
-          const repeat = task.data?.repeat;
-          if (repeat === 'daily' || repeat === 'weekly') {
-            const nextDate = new Date(task.time);
-            if (repeat === 'daily') nextDate.setDate(nextDate.getDate() + 1);
-            if (repeat === 'weekly') nextDate.setDate(nextDate.getDate() + 7);
-
-            // Update to next execution time instead of marking complete
-            await doc.ref.update({ status: 'pending', time: nextDate.toISOString(), retryCount: 0 });
-            console.log(`🔄 Recurring task ${taskId} rescheduled for ${nextDate.toISOString()}`);
-          } else {
-            // Non-recurring: mark complete
-            await doc.ref.update({ status: 'completed', executedAt: now });
-          }
-
-          console.log(`✅ Scheduled task ${taskId} (${task.type}) executed.`);
-
-          // ── Notify Owner of Completion ────────────────────
-          if (task.ownerNumber && task.sessionId) {
-            const completionMsg = `✅ *Scheduled Task Done!*\n\n*Type:* ${task.type}\n*Contacts:* ${task.data?.numbers?.length || 1}\n*Time:* ${new Date(task.time).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`;
-            whatsapp.sendText({
-              sessionId: task.sessionId,
-              to: task.ownerNumber,
-              text: completionMsg
-            }).catch(() => { });
-          }
-
-        } catch (err) {
-          console.error(`❌ Task ${taskId} failed:`, err);
-          if (retryCount < MAX_RETRIES) {
-            // Retry: unlock the task with incremented retry counter
-            await doc.ref.update({ status: 'pending', retryCount: retryCount + 1 });
-            console.log(`🔁 Task ${taskId} will retry (${retryCount + 1}/${MAX_RETRIES})`);
-          } else {
-            await doc.ref.update({ status: 'failed', error: (err as any).message, failedAt: now });
-            console.error(`💀 Task ${taskId} permanently failed after ${MAX_RETRIES} retries.`);
-          }
-        }
-      }
-    } catch (err) {
-      console.error("Scheduler Poll Error:", err);
-    }
-  }, 60 * 1000);
+  const scheduler = new TaskScheduler(whatsapp, queue);
+  scheduler.start();
 }
 
 /**
@@ -1574,11 +1612,11 @@ function startLogCleanup() {
       if (oldLogsSnap.empty) return;
 
       const batch = db.batch();
-      oldLogsSnap.docs.forEach(doc => batch.delete(doc.ref));
+      oldLogsSnap.docs.forEach((doc: any) => batch.delete(doc.ref));
       await batch.commit();
       console.log(`♻️ Auto-Cleanup: Successfully deleted ${oldLogsSnap.size} logs older than 5 days.`);
     } catch (err) {
       console.error("❌ Auto-Cleanup Error:", err);
     }
-  }, 6 * 60 * 60 * 1000); // 6 hours interval
+  }, 24 * 60 * 60 * 1000); // Once every 24 hours
 }
