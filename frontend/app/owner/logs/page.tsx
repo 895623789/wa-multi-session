@@ -26,27 +26,21 @@ import { motion } from "framer-motion";
 export default function ActivityLogsPage() {
     const [liveStream, setLiveStream] = useState(true);
     const [logs, setLogs] = useState<any[]>([]);
-    const [stats, setStats] = useState({ logs24h: 18542, alerts: 12, queriesPerSec: 205, uptime: "99.99%" });
+    const [stats, setStats] = useState({ logs24h: 0, alerts: 0, queriesPerSec: 0, uptime: "100%" });
     const [loading, setLoading] = useState(true);
 
     const fetchLogs = async () => {
         try {
-            const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
-            const res = await fetch(`${baseUrl}/owner/logs`);
+            const res = await fetch("http://localhost:5000/owner/logs");
             if (res.ok) {
                 const data = await res.json();
-                if (data.logs && data.logs.length > 0) {
-                    setLogs(data.logs);
-                } else {
-                    // Fallback to empty if genuinely no data
-                    setLogs([]);
-                }
+                if (data.logs) setLogs(data.logs);
                 if (data.stats) setStats({
                     ...stats,
-                    logs24h: data.stats.logs24h ?? stats.logs24h,
-                    alerts: data.stats.alerts ?? stats.alerts,
-                    queriesPerSec: data.stats.queriesPerSec ?? stats.queriesPerSec,
-                    uptime: data.stats.uptime ?? stats.uptime
+                    logs24h: data.stats.logs24h || stats.logs24h,
+                    alerts: data.stats.alerts || stats.alerts,
+                    queriesPerSec: data.stats.queriesPerSec || stats.queriesPerSec,
+                    uptime: data.stats.uptime || stats.uptime
                 });
             }
         } catch (err) {
@@ -137,9 +131,17 @@ export default function ActivityLogsPage() {
 
             {/* Log Table */}
             <div className="bg-slate-900 rounded-[32px] overflow-hidden shadow-2xl border border-slate-800">
-                <div className="p-6 bg-slate-800/50 border-b border-slate-800 flex items-center gap-2">
-                    <Activity size={18} className="text-indigo-400" />
-                    <h2 className="text-xs font-black text-slate-300 uppercase tracking-widest">Real-time System Logs</h2>
+                <div className="p-6 bg-slate-800/50 border-b border-slate-800 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Activity size={18} className="text-indigo-400" />
+                        <h2 className="text-xs font-black text-slate-300 uppercase tracking-widest">Real-time System Logs</h2>
+                    </div>
+                    {loading && (
+                        <div className="flex items-center gap-2 px-3 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-full">
+                            <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></div>
+                            <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest">Syncing with Backend...</span>
+                        </div>
+                    )}
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-left border-collapse">
@@ -153,25 +155,7 @@ export default function ActivityLogsPage() {
                             </tr>
                         </thead>
                         <tbody className="font-mono text-[11px]">
-                            {loading && logs.length === 0 ? (
-                                <tr>
-                                    <td colSpan={5} className="px-8 py-12 text-center text-slate-500">
-                                        <div className="flex flex-col items-center justify-center gap-3">
-                                            <RotateCw size={24} className="animate-spin text-indigo-500" />
-                                            <p className="font-bold text-xs uppercase tracking-widest">Connecting to Audit Stream...</p>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ) : logs.length === 0 ? (
-                                <tr>
-                                    <td colSpan={5} className="px-8 py-12 text-center text-slate-500">
-                                        <div className="flex flex-col items-center justify-center gap-3">
-                                            <ShieldAlert size={24} className="text-slate-600" />
-                                            <p className="font-bold text-xs uppercase tracking-widest">No Activity Logs Found</p>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ) : logs.map((log) => (
+                            {logs.length > 0 ? logs.map((log) => (
                                 <tr key={log.id} className="hover:bg-slate-800/40 transition-colors group">
                                     <td className="px-8 py-4 border-b border-slate-800/50">
                                         <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${log.level === 'Critical' ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20' :
@@ -200,7 +184,13 @@ export default function ActivityLogsPage() {
                                         </span>
                                     </td>
                                 </tr>
-                            ))}
+                            )) : (
+                                <tr>
+                                    <td colSpan={5} className="px-8 py-12 text-center text-slate-500 italic uppercase text-[10px] font-black tracking-widest">
+                                        No real system audit logs found. System is currently quiet.
+                                    </td>
+                                </tr>
+                            )}
                         </tbody>
                     </table>
                 </div>

@@ -4,7 +4,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowLeft, Check, Zap, Crown, Building2, Loader2, MessageSquare, Users, Bot, Shield } from "lucide-react";
-import { doc, updateDoc, serverTimestamp } from "firebase/firestore";
+import { doc, updateDoc, serverTimestamp, collection, addDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 declare global {
@@ -123,10 +123,25 @@ export default function SubscriptionPage() {
                 handler: async function (response: any) {
                     // Success callback
                     try {
+                        const planName = planId.charAt(0).toUpperCase() + planId.slice(1);
                         await updateDoc(doc(db, "users", user.uid), {
-                            plan: planId.charAt(0).toUpperCase() + planId.slice(1),
+                            plan: planName,
                             planUpdatedAt: serverTimestamp(),
                         });
+
+                        // Record in payments collection for owner
+                        await addDoc(collection(db, "payments"), {
+                            amount: priceOptions[planId] / 100, // stored as paise in razorpay
+                            user: userData?.displayName || "Unknown",
+                            email: user.email,
+                            plan: planName,
+                            method: "Razorpay",
+                            status: "Paid",
+                            timestamp: serverTimestamp(),
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            uid: user.uid
+                        });
+
                         setSuccess(`Payment Successful! Upgraded to ${planId.toUpperCase()}!`);
                         setTimeout(() => setSuccess(""), 4000);
                     } catch (err) {

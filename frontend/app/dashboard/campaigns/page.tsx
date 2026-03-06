@@ -4,13 +4,15 @@ import {
     Send, Users, MessageSquareText, Activity, X, Plus, Trash2, CheckCircle2,
     AlertCircle, Loader2, Globe, Sparkles, MessageSquare, Bot, Zap,
     Mic, SendHorizontal, Smartphone, ChevronRight, Wand2, ArrowLeft,
-    ShieldCheck, Calendar
+    ShieldCheck, Calendar, History, ListRestart, MoreHorizontal, Check,
+    AlertTriangle, ArrowRight, RotateCcw
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, LayoutGroup } from "framer-motion";
 import { db } from "@/lib/firebase";
-import { collection, query, getDocs } from "firebase/firestore";
+import { collection, query, getDocs, orderBy, limit } from "firebase/firestore";
 import { useAuth } from "@/components/AuthProvider";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 const COUNTRY_CODES = [
     { code: "+91", name: "India", flag: "🇮🇳" },
@@ -23,6 +25,7 @@ const COUNTRY_CODES = [
 
 export default function CampaignsPage() {
     const { user } = useAuth();
+    const router = useRouter();
     const [sessions, setSessions] = useState<string[]>([]);
     const [agentNames, setAgentNames] = useState<Record<string, string>>({});
     const [selectedSession, setSelectedSession] = useState("");
@@ -44,6 +47,11 @@ export default function CampaignsPage() {
     const [inputMode, setInputMode] = useState<'individual' | 'bulk'>('individual');
     const [bulkNumbers, setBulkNumbers] = useState("");
 
+    // Wizard States
+    const [wizardOpen, setWizardOpen] = useState(false);
+    const [wizardStep, setWizardStep] = useState(1);
+    const [campaignName, setCampaignName] = useState("");
+
     // Campaign History State
     const [campaignHistory, setCampaignHistory] = useState<any[]>([]);
 
@@ -59,7 +67,7 @@ export default function CampaignsPage() {
     }, []);
 
     const saveCampaignToHistory = (campaign: any) => {
-        const newHistory = [campaign, ...campaignHistory].slice(0, 5); // Keep last 5
+        const newHistory = [campaign, ...campaignHistory].slice(0, 7); // Keep last 7
         setCampaignHistory(newHistory);
         localStorage.setItem('campaignHistory', JSON.stringify(newHistory));
     };
@@ -153,7 +161,7 @@ export default function CampaignsPage() {
             return;
         }
 
-        setStep('progress');
+        setWizardStep(5);
         setLoading(true);
         setProgress(0);
 
@@ -194,35 +202,49 @@ export default function CampaignsPage() {
                     enhancedAI: true
                 })
             });
+            const data = await res.json();
             clearInterval(interval);
             setProgress(100);
 
             // Save History
             saveCampaignToHistory({
                 id: Date.now(),
+                name: campaignName || `Campaign ${new Date().toLocaleDateString()}`,
                 date: new Date().toISOString(),
                 session: selectedSession,
                 sessionName: agentNames[selectedSession] || selectedSession.split('_').pop() || "Agent",
                 context: context,
                 targetCount: validNumbers.length,
-                successCount: data.success || validNumbers.length,
+                successCount: res.ok ? validNumbers.length : 0,
+                numbers: validNumbers,
             });
 
             setTimeout(() => {
-                setResult({ ...data, isError: !res.ok, message: data.message || "All pulses successfully integrated into the neural network." });
-                setStep('summary');
+                setResult({
+                    isError: !res.ok,
+                    message: res.ok ? "All pulses successfully integrated into the neural network." : (data.error || "Deployment failed. Please check core status."),
+                    error: !res.ok ? (data.error || "Deployment failed") : null,
+                    success: res.ok ? validNumbers.length : 0,
+                    failed: res.ok ? 0 : validNumbers.length
+                });
+                setWizardStep(6);
                 setLoading(false);
             }, 500);
         } catch (e: any) {
             clearInterval(interval);
-            setResult({ error: "Unable to connect to service. Please check if the backend is running.", isError: true });
-            setStep('summary');
+            setResult({
+                error: "Unable to connect to service. Please check if the backend is running.",
+                isError: true,
+                message: "Neural connection timeout. Verification failed."
+            });
+            setWizardStep(6);
             setLoading(false);
         }
     };
 
     const resetCampaign = () => {
-        setStep('setup');
+        setWizardOpen(false);
+        setWizardStep(1);
         setResult(null);
         setProgress(0);
         setAiStep('idle');
@@ -230,443 +252,406 @@ export default function CampaignsPage() {
         setContext("");
         setTargetNumbers([{ id: Math.random(), country: "+91", number: "" }]);
         setBulkNumbers("");
+        setCampaignName("");
     };
 
     const loadHistoryCampaign = (campaign: any) => {
+        setCampaignName(campaign.name + " (Copy)");
         setSelectedSession(campaign.session);
         setContext(campaign.context);
         setInputMode('bulk');
-        // Let's reset the targets specifically
-        setStep('setup');
+        setBulkNumbers(campaign.numbers?.join('\n') || "");
+        setWizardOpen(true);
+        setWizardStep(1);
     };
 
     return (
         <div className="min-h-screen bg-[#FDFCFE] dark:bg-slate-950 p-4 md:p-8 font-outfit selection:bg-indigo-100 dark:selection:bg-indigo-500/30">
             {/* ─── Premium Header ─── */}
-            <header className="max-w-6xl mx-auto mb-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+            <header className="max-w-4xl mx-auto mb-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                 <div>
                     <motion.div
                         initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}
                         className="flex items-center gap-4 mb-2"
                     >
-                        <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-2xl shadow-xl shadow-slate-200/50 dark:shadow-none flex items-center justify-center text-indigo-600 border border-slate-100 dark:border-slate-700">
+                        <div className="w-12 h-12 bg-white dark:bg-slate-900 rounded-2xl shadow-xl shadow-slate-200/50 dark:shadow-none flex items-center justify-center text-indigo-600 border border-slate-100 dark:border-slate-800">
                             <Send className="w-6 h-6" />
                         </div>
-                        <h1 className="text-4xl font-black text-slate-900 dark:text-white tracking-tight">AI Campaigns</h1>
+                        <h1 className="text-4xl font-black text-slate-900 dark:text-white tracking-tight">Campaigns</h1>
                     </motion.div>
                     <p className="text-slate-400 font-bold text-sm ml-16 flex items-center gap-2">
                         <Activity className="w-3.5 h-3.5 text-emerald-500" />
-                        Neural Multi-Core Deployment
+                        Latest deployments & history
                     </p>
                 </div>
 
                 <div className="flex items-center gap-3">
                     <button
-                        onClick={() => setUseAiMode(!useAiMode)}
-                        className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest transition-all ${useAiMode
-                            ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/30'
-                            : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 shadow-xl shadow-slate-200/50 border border-slate-100 dark:border-slate-700'
-                            }`}
+                        onClick={() => {
+                            setWizardOpen(true);
+                            setWizardStep(1);
+                            setCampaignName("");
+                            setContext("");
+                            setTargetNumbers([{ id: Math.random(), country: "+91", number: "" }]);
+                            setBulkNumbers("");
+                        }}
+                        className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-8 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl hover:scale-105 active:scale-95 transition-all whitespace-nowrap flex items-center gap-2"
                     >
-                        {useAiMode ? <Zap className="w-4 h-4 fill-white" /> : <Wand2 className="w-4 h-4" />}
-                        {useAiMode ? 'Manual Mode' : 'AI Assistant'}
-                    </button>
-                    <button onClick={resetCampaign} className="bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl hover:scale-105 active:scale-95 transition-all whitespace-nowrap">
-                        <Plus className="w-4 h-4 inline mr-2" /> New Campaign
+                        <Plus className="w-4 h-4" /> New Campaign
                     </button>
                 </div>
             </header>
 
-            <main className="max-w-6xl mx-auto relative">
-                <AnimatePresence mode="wait">
-                    {step === 'setup' && (
-                        <motion.div
-                            key="setup-screen"
-                            initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -30 }}
-                            className="relative"
-                        >
-                            {/* Decorative Background Elements */}
-                            <div className="absolute -top-20 -right-20 w-80 h-80 bg-indigo-500/5 rounded-full blur-3xl pointer-events-none" />
-                            <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-rose-500/5 rounded-full blur-3xl pointer-events-none" />
+            <main className="max-w-4xl mx-auto space-y-12">
+                {/* ─── History Section ─── */}
+                <section className="space-y-6">
+                    <div className="flex items-center justify-between">
+                        <h2 className="text-lg font-black text-slate-900 dark:text-white flex items-center gap-3 uppercase tracking-widest">
+                            <History className="w-5 h-5 text-indigo-500" />
+                            Recent Campaigns
+                        </h2>
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Showing last 7</span>
+                    </div>
 
-                            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-                                {/* Left Column: The Neural Core / AI Chat */}
-                                <div className="lg:col-span-7 space-y-8">
-                                    <div className="bg-white/70 dark:bg-slate-800/50 backdrop-blur-3xl rounded-[3rem] p-1 shadow-[0_32px_128px_-16px_rgba(0,0,0,0.08)] border border-white dark:border-slate-700 overflow-hidden">
-
-                                        {useAiMode ? (
-                                            /* AI Chat Interface */
-                                            <div className="p-10 space-y-8">
-                                                <div className="flex items-center gap-4 mb-4">
-                                                    <div className="w-10 h-10 bg-indigo-500 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-500/20">
-                                                        <Sparkles className="w-5 h-5" />
-                                                    </div>
-                                                    <div>
-                                                        <h2 className="text-xl font-black text-slate-900 dark:text-white">Neural Assistant</h2>
-                                                        <p className="text-[10px] uppercase font-black tracking-widest text-slate-400">Natural Language Processor</p>
-                                                    </div>
-                                                </div>
-
-                                                <div className="space-y-6">
-                                                    <div className="bg-slate-50 dark:bg-slate-900/50 p-6 rounded-[2rem] border-2 border-slate-100 dark:border-slate-800">
-                                                        <p className="text-sm font-bold text-slate-600 dark:text-slate-400 leading-relaxed italic">
-                                                            "Hello! Tell me who to message and what to say. For example: 'Send Hello to 919876543210 and 918877665544, tell them about our new flat'."
-                                                        </p>
-                                                    </div>
-
-                                                    {aiFeedback && (
-                                                        <motion.div
-                                                            initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-                                                            className="flex gap-4 items-start"
-                                                        >
-                                                            <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center text-white shrink-0">
-                                                                <CheckCircle2 className="w-4 h-4" />
-                                                            </div>
-                                                            <div className="bg-emerald-50 dark:bg-emerald-900/20 p-5 rounded-3xl border border-emerald-100 dark:border-emerald-800/30">
-                                                                <p className="text-sm font-bold text-emerald-800 dark:text-emerald-300">{aiFeedback}</p>
-                                                            </div>
-                                                        </motion.div>
-                                                    )}
-
-                                                    {aiStep === 'select_bot' && (
-                                                        <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                                                            <label className="text-xs font-black uppercase text-slate-400 flex items-center gap-2 tracking-widest">
-                                                                <ShieldCheck className="w-4 h-4 text-indigo-500" /> Select Deployment Neural Core
-                                                            </label>
-                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                                {sessions.map(s => (
-                                                                    <button
-                                                                        key={s}
-                                                                        onClick={() => {
-                                                                            setSelectedSession(s);
-                                                                            setAiStep('ready');
-                                                                            setAiFeedback(`Perfect. I'll use ${agentNames[s] || s.split('_').pop()}. Ready to deploy!`);
-                                                                        }}
-                                                                        className={`p-4 rounded-2xl border-2 transition-all flex items-center gap-3 text-left ${selectedSession === s
-                                                                            ? 'bg-indigo-500 border-indigo-500 text-white shadow-xl shadow-indigo-500/20'
-                                                                            : 'bg-white dark:bg-slate-800 border-slate-100 dark:border-slate-700 hover:border-indigo-300'
-                                                                            }`}
-                                                                    >
-                                                                        <Bot className={`w-5 h-5 ${selectedSession === s ? 'text-white' : 'text-indigo-400'}`} />
-                                                                        <span className="font-black text-xs truncate">{agentNames[s] || s.split('_').pop()}</span>
-                                                                    </button>
-                                                                ))}
-                                                            </div>
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                <div className="relative mt-8 group">
-                                                    <textarea
-                                                        rows={3}
-                                                        value={aiQuery}
-                                                        onChange={(e) => setAiQuery(e.target.value)}
-                                                        placeholder="Type your command..."
-                                                        className="w-full bg-slate-50 dark:bg-slate-900 py-6 pl-8 pr-20 rounded-[2.5rem] border-2 border-slate-100 dark:border-slate-800 outline-none focus:border-indigo-400 transition-all font-bold text-sm shadow-inner resize-none tracking-tight"
-                                                    />
-                                                    <button
-                                                        disabled={aiIsProcessing || !aiQuery.trim()}
-                                                        onClick={handleAiProcess}
-                                                        className="absolute right-4 bottom-4 w-12 h-12 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl shadow-xl shadow-indigo-600/20 flex items-center justify-center transition-all disabled:opacity-50 active:scale-95 group-focus-within:scale-105"
-                                                    >
-                                                        {aiIsProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <SendHorizontal className="w-5 h-5" />}
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            /* Manual Form Interface */
-                                            <div className="p-10 space-y-10">
-                                                <section className="space-y-6">
-                                                    <div className="flex items-center justify-between">
-                                                        <h3 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-3">
-                                                            <div className="w-8 h-8 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center">
-                                                                <MessageSquareText className="w-4 h-4" />
-                                                            </div>
-                                                            Business Logic
-                                                        </h3>
-                                                        <span className="bg-orange-50 text-orange-600 text-[8px] font-black uppercase px-2 py-0.5 rounded-full tracking-tighter">Neural AI</span>
-                                                    </div>
-                                                    <div className="relative group">
-                                                        <textarea
-                                                            rows={6}
-                                                            value={context}
-                                                            onChange={e => setContext(e.target.value)}
-                                                            placeholder="Describe your goal... AI will handle the unique generation."
-                                                            className="w-full bg-slate-50/50 dark:bg-slate-900/30 p-8 rounded-[2rem] border-2 border-slate-100 dark:border-slate-800 outline-none focus:border-orange-400 transition-all text-sm font-bold shadow-inner placeholder:text-slate-300 italic"
-                                                        />
-                                                        <div className="absolute inset-x-8 bottom-4 flex items-center justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                                                            <span>Anti-Ban Protection Active</span>
-                                                            <Sparkles className="w-4 h-4 text-orange-300" />
-                                                        </div>
-                                                    </div>
-                                                </section>
-
-                                                <section className="space-y-6">
-                                                    <h3 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-3">
-                                                        <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center">
-                                                            <Bot className="w-4 h-4" />
-                                                        </div>
-                                                        Neural Core (From Number)
-                                                    </h3>
-                                                    <div className="relative group">
-                                                        <select
-                                                            value={selectedSession}
-                                                            onChange={e => setSelectedSession(e.target.value)}
-                                                            className="w-full bg-slate-50/50 dark:bg-slate-900/30 py-5 pl-8 pr-12 rounded-[1.5rem] border-2 border-slate-100 dark:border-slate-800 outline-none focus:border-indigo-400 transition-all font-black text-sm appearance-none shadow-sm cursor-pointer"
-                                                        >
-                                                            <option value="" disabled>Select Core Link...</option>
-                                                            {sessions.map(s => (
-                                                                <option key={s} value={s}>
-                                                                    {agentNames[s] || s.split('_').pop() || s} (Active Status)
-                                                                </option>
-                                                            ))}
-                                                        </select>
-                                                        <ChevronRight className="absolute right-6 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 rotate-90 pointer-events-none" />
-                                                    </div>
-                                                </section>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Deployment Button (Global for both modes if ready) */}
-                                    <motion.button
-                                        whileHover={{ y: -4, shadow: "0 25px 50px -12px rgba(52, 211, 153, 0.25)" }}
-                                        whileTap={{ scale: 0.98 }}
-                                        onClick={handleStartCampaign}
-                                        disabled={loading || !selectedSession || targetNumbers.length === 0 || !context}
-                                        className="w-full py-8 bg-gradient-to-r from-emerald-500 to-teal-600 text-white rounded-[3rem] font-black text-lg tracking-[0.2em] shadow-2xl flex items-center justify-center gap-4 transition-all disabled:opacity-30 disabled:grayscale uppercase"
-                                    >
-                                        {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : <Zap className="w-6 h-6 fill-white" />}
-                                        {loading ? 'Powering Up...' : 'Initiate Deployment'}
-                                    </motion.button>
-                                </div>
-
-                                {/* Right Column: Audience & Meta */}
-                                <div className="lg:col-span-5 space-y-8">
-                                    <div className="bg-white/70 dark:bg-slate-800/50 backdrop-blur-3xl rounded-[3rem] p-10 shadow-[0_32px_128px_-16px_rgba(0,0,0,0.08)] border border-white dark:border-slate-700">
-                                        <div className="flex items-center justify-between mb-8">
-                                            <h3 className="text-xl font-black text-slate-900 dark:text-white flex items-center gap-3">
-                                                <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center">
-                                                    <Users className="w-4 h-4" />
-                                                </div>
-                                                Audience Link
-                                            </h3>
-
-                                            <div className="flex items-center gap-2">
-                                                <select
-                                                    value={inputMode}
-                                                    onChange={e => setInputMode(e.target.value as any)}
-                                                    className="bg-slate-100 dark:bg-slate-800/50 text-slate-600 dark:text-slate-300 text-[10px] font-black uppercase px-3 py-2 rounded-xl outline-none cursor-pointer border border-slate-200 dark:border-slate-700"
-                                                >
-                                                    <option value="individual">One by One</option>
-                                                    <option value="bulk">Bulk Paste</option>
-                                                </select>
-                                                <span className="bg-rose-50 text-rose-600 text-[10px] font-black px-3 py-2 rounded-xl">
-                                                    {inputMode === 'individual'
-                                                        ? targetNumbers.length
-                                                        : bulkNumbers.split(/[\n,]+/).filter(n => n.replace(/\D/g, '').length >= 10).length} TARGETS
-                                                </span>
-                                            </div>
-                                        </div>
-
-                                        {inputMode === 'individual' ? (
-                                            <div className="space-y-4 max-h-[440px] overflow-y-auto pr-2 custom-scrollbar">
-                                                {targetNumbers.map((tn, index) => (
-                                                    <motion.div
-                                                        key={tn.id}
-                                                        initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: index * 0.05 }}
-                                                        className="flex gap-2 group"
-                                                    >
-                                                        <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 flex-1 border border-slate-100 dark:border-slate-800 flex items-center gap-4 group-hover:border-rose-200 transition-all">
-                                                            <div className="w-8 h-8 rounded-lg bg-white dark:bg-slate-800 flex items-center justify-center text-[10px] font-black text-slate-400">#{index + 1}</div>
-                                                            <select
-                                                                value={tn.country}
-                                                                onChange={e => updateNumber(tn.id, 'country', e.target.value)}
-                                                                className="bg-transparent font-black text-xs outline-none w-16"
-                                                            >
-                                                                {COUNTRY_CODES.map(c => <option key={c.code} value={c.code}>{c.flag} {c.code}</option>)}
-                                                            </select>
-                                                            <input
-                                                                type="text" value={tn.number}
-                                                                onChange={e => updateNumber(tn.id, 'number', e.target.value.replace(/\D/g, ""))}
-                                                                placeholder="Phone range..."
-                                                                className="bg-transparent flex-1 font-black text-sm outline-none placeholder:text-slate-200"
-                                                            />
-                                                        </div>
-                                                        <button
-                                                            onClick={() => removeNumberInput(tn.id)}
-                                                            className="w-14 h-14 bg-slate-50/50 dark:bg-slate-900/30 hover:bg-rose-50 text-slate-300 hover:text-rose-500 rounded-2xl flex items-center justify-center transition-all"
-                                                        >
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
-                                                    </motion.div>
-                                                ))}
-                                                <button
-                                                    onClick={addNumberInput}
-                                                    className="w-full mt-6 py-4 border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-[1.5rem] text-slate-400 hover:text-rose-500 hover:border-rose-200 hover:bg-rose-50/30 transition-all font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2"
-                                                >
-                                                    <Plus className="w-3 h-3" /> Add Peripheral Node
-                                                </button>
-                                            </div>
-                                        ) : (
-                                            <div className="space-y-4">
-                                                <textarea
-                                                    rows={10}
-                                                    value={bulkNumbers}
-                                                    onChange={e => setBulkNumbers(e.target.value)}
-                                                    placeholder="Paste multiple numbers here (separated by commas or new lines)...&#10;919876543210&#10;918877665544"
-                                                    className="w-full bg-slate-50/50 dark:bg-slate-900/30 p-6 rounded-[2rem] border-2 border-slate-100 dark:border-slate-800 outline-none focus:border-rose-400 transition-all text-sm font-bold shadow-inner placeholder:text-slate-300 resize-none hover:border-rose-300 custom-scrollbar"
-                                                />
-                                                <div className="flex justify-between items-center px-2">
-                                                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2">
-                                                        <Sparkles className="w-3 h-3 text-rose-400" /> AI Auto-Format Enabled
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Stats Card */}
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="bg-white dark:bg-slate-800 p-6 rounded-[2rem] border border-slate-100 dark:border-slate-700 shadow-xl shadow-slate-200/20">
-                                            <Calendar className="w-5 h-5 text-indigo-500 mb-3" />
-                                            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Next Shift</p>
-                                            <p className="text-sm font-black text-slate-900 dark:text-white">Instant</p>
-                                        </div>
-                                        <div className="bg-white dark:bg-slate-800 p-6 rounded-[2rem] border border-slate-100 dark:border-slate-700 shadow-xl shadow-slate-200/20">
-                                            <ShieldCheck className="w-5 h-5 text-emerald-500 mb-3" />
-                                            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Safety Rate</p>
-                                            <p className="text-sm font-black text-slate-900 dark:text-white">99.8%</p>
-                                        </div>
-                                    </div>
-
-                                    {/* Campaign History */}
-                                    {campaignHistory.length > 0 && (
-                                        <div className="bg-white/70 dark:bg-slate-800/50 backdrop-blur-3xl rounded-[3rem] p-8 shadow-[0_32px_128px_-16px_rgba(0,0,0,0.08)] border border-white dark:border-slate-700 mt-8">
-                                            <h3 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-2 mb-6 uppercase tracking-widest">
-                                                <Calendar className="w-4 h-4 text-indigo-500" />
-                                                Recent Deployments
-                                            </h3>
-                                            <div className="space-y-3">
-                                                {campaignHistory.map((camp: any) => (
-                                                    <button
-                                                        key={camp.id}
-                                                        onClick={() => loadHistoryCampaign(camp)}
-                                                        className="w-full text-left bg-slate-50 dark:bg-slate-900/50 hover:bg-indigo-50 dark:hover:bg-slate-800 p-5 rounded-[1.5rem] border border-slate-100 dark:border-slate-800 transition-all group"
-                                                    >
-                                                        <div className="flex justify-between items-center mb-2">
-                                                            <span className="font-black text-xs text-slate-700 dark:text-slate-300 group-hover:text-indigo-600 transition-colors uppercase tracking-wider">
-                                                                {camp.sessionName}
-                                                            </span>
-                                                            <span className="text-[10px] font-bold text-slate-400">{new Date(camp.date).toLocaleDateString()}</span>
-                                                        </div>
-                                                        <div className="flex justify-between items-end gap-4">
-                                                            <p className="text-xs text-slate-500 font-bold truncate max-w-[60%] italic">"{camp.context}"</p>
-                                                            <span className="text-[10px] font-black bg-emerald-100 text-emerald-600 px-3 py-1 rounded-full whitespace-nowrap">{camp.targetCount} Targets</span>
-                                                        </div>
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </motion.div>
-                    )}
-
-                    {step === 'progress' && (
-                        /* Premium Deployment Screen */
-                        <motion.div
-                            key="progress-screen"
-                            initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 1.1 }}
-                            className="max-w-4xl mx-auto text-center space-y-12 py-20"
-                        >
-                            <div className="relative inline-block">
+                    <div className="grid gap-4">
+                        <AnimatePresence mode="popLayout">
+                            {campaignHistory.length === 0 ? (
                                 <motion.div
-                                    animate={{ rotate: 360 }} transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
-                                    className="w-64 h-64 border-t-4 border-l-4 border-indigo-500 rounded-full blur-[2px]"
-                                />
-                                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                    initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                                    className="bg-white dark:bg-slate-900/50 rounded-[2rem] p-12 border border-dashed border-slate-200 dark:border-slate-800 text-center space-y-4"
+                                >
+                                    <div className="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto text-slate-300">
+                                        <History className="w-8 h-8" />
+                                    </div>
+                                    <p className="text-slate-400 font-bold">No campaign history found yet.</p>
+                                </motion.div>
+                            ) : (
+                                campaignHistory.map((camp, idx) => (
                                     <motion.div
-                                        animate={{ scale: [1, 1.1, 1] }} transition={{ duration: 2, repeat: Infinity }}
-                                        className="w-40 h-40 bg-white dark:bg-slate-900 rounded-full shadow-2xl flex flex-col items-center justify-center relative z-10"
+                                        key={camp.id}
+                                        initial={{ opacity: 0, y: 20 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ delay: idx * 0.05 }}
+                                        className="group bg-white dark:bg-slate-900/50 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-[2rem] p-6 border border-slate-100 dark:border-slate-800 transition-all flex flex-col md:flex-row md:items-center justify-between gap-6 shadow-sm hover:shadow-xl hover:shadow-slate-200/20"
                                     >
-                                        <span className="text-5xl font-black text-slate-900 dark:text-white">{Math.round(progress)}%</span>
-                                        <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mt-2">{progress < 100 ? 'Syncing...' : 'Complete'}</span>
+                                        <div className="flex items-center gap-5">
+                                            <div className="w-12 h-12 bg-indigo-50 dark:bg-indigo-900/30 rounded-2xl flex items-center justify-center text-indigo-500 group-hover:scale-110 transition-transform">
+                                                <Zap className="w-5 h-5" />
+                                            </div>
+                                            <div>
+                                                <h3 className="font-black text-slate-900 dark:text-white text-lg leading-none mb-2">{camp.name}</h3>
+                                                <div className="flex items-center gap-3 text-xs font-bold text-slate-400">
+                                                    <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> {new Date(camp.date).toLocaleDateString()}</span>
+                                                    <span className="w-1 h-1 bg-slate-200 dark:bg-slate-700 rounded-full" />
+                                                    <span className="flex items-center gap-1.5"><Bot className="w-3.5 h-3.5" /> {camp.sessionName}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-6 ml-auto md:ml-0">
+                                            <div className="text-right hidden sm:block">
+                                                <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Success Rate</p>
+                                                <p className="text-sm font-black text-emerald-500">100%</p>
+                                            </div>
+                                            <button
+                                                onClick={() => loadHistoryCampaign(camp)}
+                                                className="bg-indigo-500 hover:bg-indigo-600 text-white p-4 rounded-2xl shadow-lg shadow-indigo-500/20 transition-all active:scale-90"
+                                                title="Re-run Campaign"
+                                            >
+                                                <RotateCcw className="w-5 h-5 text-white" />
+                                            </button>
+                                        </div>
                                     </motion.div>
-                                </div>
-                            </div>
-
-                            <div className="space-y-4">
-                                <h2 className="text-4xl font-black text-slate-900 dark:text-white tracking-tight">Deploying Neural Pulses</h2>
-                                <p className="text-slate-400 font-bold max-w-sm mx-auto">Connecting through {agentNames[selectedSession] || selectedSession} across the decentralized network.</p>
-                            </div>
-
-                            <div className="flex justify-center gap-12">
-                                <div className="text-center">
-                                    <p className="text-[10px] font-black uppercase text-slate-400 mb-1">Targets</p>
-                                    <p className="text-2xl font-black text-slate-900 dark:text-white">{targetNumbers.length}</p>
-                                </div>
-                                <div className="w-px h-12 bg-slate-100 dark:bg-slate-800" />
-                                <div className="text-center">
-                                    <p className="text-[10px] font-black uppercase text-slate-400 mb-1">Est. Time</p>
-                                    <p className="text-2xl font-black text-slate-900 dark:text-white">{Math.ceil(targetNumbers.length * 0.5)}s</p>
-                                </div>
-                            </div>
-                        </motion.div>
-                    )}
-
-                    {step === 'summary' && result && (
-                        <motion.div
-                            key="summary-screen"
-                            initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
-                            className="max-w-2xl mx-auto"
-                        >
-                            <div className="bg-white/70 dark:bg-slate-800/50 backdrop-blur-3xl rounded-[3rem] p-12 shadow-2xl border border-white dark:border-slate-700 text-center relative overflow-hidden">
-                                {/* Success Background Glow */}
-                                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl -z-10" />
-
-                                <div className="w-24 h-24 bg-emerald-500 rounded-[2.5rem] flex items-center justify-center text-white mx-auto mb-8 shadow-2xl shadow-emerald-500/30">
-                                    <CheckCircle2 className="w-12 h-12" />
-                                </div>
-
-                                <h2 className="text-4xl font-black text-slate-900 dark:text-white mb-4">
-                                    {result.isError ? "Deployment Failed" : "Deployment Successful"}
-                                </h2>
-                                <p className="text-emerald-600 dark:text-emerald-400 font-black mb-10 text-lg px-8">
-                                    {result.message || "The neural network has acknowledged all pulses. Connection stable."}
-                                </p>
-
-                                <div className="bg-slate-50 dark:bg-slate-900/50 p-8 rounded-[2rem] border border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-8 mb-10">
-                                    <div className="text-left">
-                                        <p className="text-[10px] font-black uppercase text-slate-400 mb-1">Delivered</p>
-                                        <p className="text-3xl font-black text-emerald-500">{result.success || targetNumbers.length}</p>
-                                    </div>
-                                    <div className="text-left">
-                                        <p className="text-[10px] font-black uppercase text-slate-400 mb-1">Failures</p>
-                                        <p className="text-3xl font-black text-rose-500">{result.failed || 0}</p>
-                                    </div>
-                                </div>
-
-                                <div className="flex flex-col gap-4">
-                                    <button
-                                        onClick={resetCampaign}
-                                        className="w-full py-5 bg-gradient-to-r from-indigo-500 to-purple-600 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-[0.2em] shadow-xl shadow-indigo-500/30 transition-all hover:scale-[1.02] active:scale-[0.98] whitespace-nowrap"
-                                    >
-                                        Initiate New Campaign
-                                    </button>
-                                    <Link
-                                        href="/dashboard/pipeline"
-                                        className="w-full py-5 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-[1.5rem] font-black text-xs uppercase tracking-widest border border-slate-100 dark:border-slate-700 transition-all hover:bg-slate-50 dark:hover:bg-slate-700/50 hover:shadow-md active:scale-95 whitespace-nowrap text-center"
-                                    >
-                                        Back to Active Pipeline
-                                    </Link>
-                                </div>
-                            </div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>
+                                ))
+                            )}
+                        </AnimatePresence>
+                    </div>
+                </section>
             </main>
+
+            {/* ─── Wizard Overlay ─── */}
+            <AnimatePresence>
+                {wizardOpen && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                        <motion.div
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            onClick={() => wizardOpen && wizardStep !== 5 && setWizardOpen(false)}
+                            className="absolute inset-0 bg-slate-950/60 backdrop-blur-md"
+                        />
+
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+                            className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-[3rem] shadow-2xl relative overflow-hidden flex flex-col max-h-[90vh]"
+                        >
+                            {/* Wizard Progress Bar */}
+                            <div className="absolute top-0 left-0 right-0 h-1.5 bg-slate-100 dark:bg-slate-800">
+                                <motion.div
+                                    className="h-full bg-indigo-500"
+                                    initial={{ width: 0 }}
+                                    animate={{ width: `${(wizardStep / 6) * 100}%` }}
+                                />
+                            </div>
+
+                            {/* Wizard Header */}
+                            <div className="p-8 pb-4 flex items-center justify-between border-b border-slate-50 dark:border-slate-800/50">
+                                <div>
+                                    <h2 className="text-xl font-black text-slate-900 dark:text-white">
+                                        {wizardStep === 1 && "Campaign Identity"}
+                                        {wizardStep === 2 && "The Message"}
+                                        {wizardStep === 3 && "Neural Core"}
+                                        {wizardStep === 4 && "Target Audience"}
+                                        {wizardStep === 5 && "Deploying..."}
+                                        {wizardStep === 6 && "Deployment Report"}
+                                    </h2>
+                                    <p className="text-[10px] font-black uppercase text-indigo-500 tracking-[0.2em]">Step {wizardStep} of 6</p>
+                                </div>
+                                <button
+                                    onClick={() => setWizardOpen(false)}
+                                    className="w-10 h-10 bg-slate-50 dark:bg-slate-800 rounded-xl flex items-center justify-center text-slate-400 hover:text-rose-500 transition-colors"
+                                >
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+
+                            {/* Wizard Content */}
+                            <div className="p-8 overflow-y-auto custom-scrollbar flex-1">
+                                <AnimatePresence mode="wait">
+                                    {wizardStep === 1 && (
+                                        <motion.div
+                                            key="step1" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+                                            className="space-y-6"
+                                        >
+                                            <p className="text-slate-400 font-bold text-sm">Choose a memorable name for your campaign to track it in history.</p>
+                                            <input
+                                                autoFocus
+                                                type="text"
+                                                value={campaignName}
+                                                onChange={(e) => setCampaignName(e.target.value)}
+                                                placeholder="e.g., Summer Sale 2024"
+                                                className="w-full bg-slate-50 dark:bg-slate-800/50 p-6 rounded-3xl border-2 border-slate-100 dark:border-slate-800 outline-none focus:border-indigo-500 transition-all font-black text-xl"
+                                            />
+                                        </motion.div>
+                                    )}
+
+                                    {wizardStep === 2 && (
+                                        <motion.div
+                                            key="step2" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+                                            className="space-y-6"
+                                        >
+                                            <p className="text-slate-400 font-bold text-sm">Describe the context of your message. Our Neural AI will generate high-conversion phrasing for you.</p>
+                                            <textarea
+                                                autoFocus
+                                                rows={6}
+                                                value={context}
+                                                onChange={(e) => setContext(e.target.value)}
+                                                placeholder="e.g., Offer 20% discount on web development services for new clients..."
+                                                className="w-full bg-slate-50 dark:bg-slate-800/50 p-6 rounded-3xl border-2 border-slate-100 dark:border-slate-800 outline-none focus:border-indigo-500 transition-all font-bold text-lg resize-none"
+                                            />
+                                        </motion.div>
+                                    )}
+
+                                    {wizardStep === 3 && (
+                                        <motion.div
+                                            key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+                                            className="space-y-4"
+                                        >
+                                            <p className="text-slate-400 font-bold text-sm">Select which WhatsApp core will handle this deployment.</p>
+                                            <div className="grid gap-3">
+                                                {sessions.map(s => (
+                                                    <button
+                                                        key={s}
+                                                        onClick={() => setSelectedSession(s)}
+                                                        className={`p-6 rounded-3xl border-2 transition-all flex items-center justify-between text-left ${selectedSession === s
+                                                            ? 'bg-indigo-500 border-indigo-500 text-white shadow-xl shadow-indigo-500/20'
+                                                            : 'bg-slate-50 dark:bg-slate-800/50 border-slate-100 dark:border-slate-800 hover:border-indigo-300'
+                                                            }`}
+                                                    >
+                                                        <div className="flex items-center gap-4">
+                                                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${selectedSession === s ? 'bg-white/20' : 'bg-white dark:bg-slate-800'}`}>
+                                                                <Bot className={`w-5 h-5 ${selectedSession === s ? 'text-white' : 'text-indigo-500'}`} />
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-black text-sm uppercase tracking-wider">{agentNames[s] || s.split('_').pop()}</p>
+                                                                <p className={`text-[10px] uppercase font-bold ${selectedSession === s ? 'text-indigo-100' : 'text-slate-400'}`}>Neural Core Active</p>
+                                                            </div>
+                                                        </div>
+                                                        {selectedSession === s && <Check className="w-6 h-6" />}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </motion.div>
+                                    )}
+
+                                    {wizardStep === 4 && (
+                                        <motion.div
+                                            key="step4" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+                                            className="space-y-6"
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <p className="text-slate-400 font-bold text-sm">Who should receive these messages?</p>
+                                                <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
+                                                    <button
+                                                        onClick={() => setInputMode('individual')}
+                                                        className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${inputMode === 'individual' ? 'bg-white dark:bg-slate-700 shadow-sm' : 'text-slate-400'}`}
+                                                    >Individual</button>
+                                                    <button
+                                                        onClick={() => setInputMode('bulk')}
+                                                        className={`px-4 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${inputMode === 'bulk' ? 'bg-white dark:bg-slate-700 shadow-sm' : 'text-slate-400'}`}
+                                                    >Bulk Paste</button>
+                                                </div>
+                                            </div>
+
+                                            {inputMode === 'individual' ? (
+                                                <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+                                                    {targetNumbers.map((tn, idx) => (
+                                                        <div key={tn.id} className="flex gap-2">
+                                                            <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-4 flex-1 border border-slate-100 dark:border-slate-800 flex items-center gap-4">
+                                                                <select
+                                                                    value={tn.country}
+                                                                    onChange={e => updateNumber(tn.id, 'country', e.target.value)}
+                                                                    className="bg-transparent font-black text-xs outline-none w-16"
+                                                                >
+                                                                    {COUNTRY_CODES.map(c => <option key={c.code} value={c.code}>{c.flag} {c.code}</option>)}
+                                                                </select>
+                                                                <input
+                                                                    type="text" value={tn.number}
+                                                                    onChange={e => updateNumber(tn.id, 'number', e.target.value.replace(/\D/g, ""))}
+                                                                    placeholder="9876543210"
+                                                                    className="bg-transparent flex-1 font-black text-sm outline-none"
+                                                                />
+                                                            </div>
+                                                            <button
+                                                                onClick={() => removeNumberInput(tn.id)}
+                                                                className="w-14 h-14 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center text-rose-400"
+                                                            ><Trash2 className="w-5 h-5" /></button>
+                                                        </div>
+                                                    ))}
+                                                    <button
+                                                        onClick={addNumberInput}
+                                                        className="w-full py-4 border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-indigo-500 hover:border-indigo-300 transition-all"
+                                                    >+ Add Another Number</button>
+                                                </div>
+                                            ) : (
+                                                <textarea
+                                                    rows={8}
+                                                    value={bulkNumbers}
+                                                    onChange={(e) => setBulkNumbers(e.target.value)}
+                                                    placeholder="919876543210, 918877665544..."
+                                                    className="w-full bg-slate-50 dark:bg-slate-800/50 p-6 rounded-3xl border-2 border-slate-100 dark:border-slate-800 outline-none focus:border-indigo-500 transition-all font-bold text-sm resize-none"
+                                                />
+                                            )}
+                                        </motion.div>
+                                    )}
+
+                                    {wizardStep === 5 && (
+                                        <motion.div
+                                            key="step5" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
+                                            className="py-20 text-center space-y-12"
+                                        >
+                                            <div className="relative inline-block">
+                                                <motion.div
+                                                    animate={{ rotate: 360 }} transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+                                                    className="w-48 h-48 border-t-4 border-l-4 border-indigo-500 rounded-full blur-[2px]"
+                                                />
+                                                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                                    <motion.div
+                                                        animate={{ scale: [1, 1.1, 1] }} transition={{ duration: 2, repeat: Infinity }}
+                                                        className="w-32 h-32 bg-white dark:bg-slate-800 rounded-full shadow-2xl flex flex-col items-center justify-center relative z-10"
+                                                    >
+                                                        <span className="text-4xl font-black text-slate-900 dark:text-white">{Math.round(progress)}%</span>
+                                                    </motion.div>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <h3 className="text-2xl font-black text-slate-900 dark:text-white">Neural pulses deploying...</h3>
+                                                <p className="text-slate-400 font-bold">Please wait while we establish connections.</p>
+                                            </div>
+                                        </motion.div>
+                                    )}
+
+                                    {wizardStep === 6 && result && (
+                                        <motion.div
+                                            key="step6" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+                                            className="text-center space-y-8 py-4"
+                                        >
+                                            <div className={`w-24 h-24 rounded-[2.5rem] flex items-center justify-center mx-auto shadow-2xl ${result.isError ? 'bg-rose-500 text-white shadow-rose-500/30' : 'bg-emerald-500 text-white shadow-emerald-500/30'}`}>
+                                                {result.isError ? <AlertTriangle className="w-12 h-12" /> : <CheckCircle2 className="w-12 h-12" />}
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <h2 className="text-3xl font-black text-slate-900 dark:text-white">
+                                                    {result.isError ? "Deployment Failed" : "Mission Successful"}
+                                                </h2>
+                                                <p className="text-slate-400 font-bold px-8">
+                                                    {result.message}
+                                                </p>
+                                            </div>
+
+                                            <div className="bg-slate-50 dark:bg-slate-800/50 p-6 rounded-3xl border border-slate-100 dark:border-slate-800 grid grid-cols-2 gap-4">
+                                                <div className="text-left">
+                                                    <p className="text-[10px] font-black uppercase text-slate-400 mb-1 tracking-widest">Delivered</p>
+                                                    <p className="text-2xl font-black text-emerald-500">{result.success || 0}</p>
+                                                </div>
+                                                <div className="text-left">
+                                                    <p className="text-[10px] font-black uppercase text-slate-400 mb-1 tracking-widest">Failures</p>
+                                                    <p className="text-2xl font-black text-rose-500">{result.failed || 0}</p>
+                                                </div>
+                                            </div>
+
+                                            {result.isError && (
+                                                <button
+                                                    onClick={() => setWizardStep(1)}
+                                                    className="w-full py-4 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-2xl font-black uppercase tracking-widest text-xs"
+                                                >
+                                                    Edit and Retry
+                                                </button>
+                                            )}
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </div>
+
+                            {/* Wizard Footer */}
+                            {wizardStep < 5 && (
+                                <div className="p-8 pt-0 flex gap-4">
+                                    {wizardStep > 1 && (
+                                        <button
+                                            onClick={() => setWizardStep(prev => prev - 1)}
+                                            className="flex-1 py-5 bg-slate-50 dark:bg-slate-800 text-slate-400 rounded-[1.5rem] font-black text-xs uppercase tracking-widest border border-slate-100 dark:border-slate-800 transition-all"
+                                        >Back</button>
+                                    )}
+                                    <button
+                                        disabled={
+                                            (wizardStep === 1 && !campaignName) ||
+                                            (wizardStep === 2 && !context) ||
+                                            (wizardStep === 3 && !selectedSession) ||
+                                            (wizardStep === 4 && (inputMode === 'bulk' ? !bulkNumbers : targetNumbers.every(n => !n.number)))
+                                        }
+                                        onClick={() => {
+                                            if (wizardStep < 4) setWizardStep(prev => prev + 1);
+                                            else handleStartCampaign(new Event('submit') as any);
+                                        }}
+                                        className="flex-[2] py-5 bg-indigo-500 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-500/20 flex items-center justify-center gap-2 transition-all disabled:opacity-30"
+                                    >
+                                        {wizardStep === 4 ? "Begin Deployment" : "Continue"} <ArrowRight className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            )}
+
+                            {wizardStep === 6 && !result.isError && (
+                                <div className="p-8 pt-0">
+                                    <button
+                                        onClick={() => setWizardOpen(false)}
+                                        className="w-full py-5 bg-indigo-500 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-500/20"
+                                    >Got it, Return to dashboard</button>
+                                </div>
+                            )}
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
 
             <style jsx global>{`
                 .custom-scrollbar::-webkit-scrollbar { width: 4px; }

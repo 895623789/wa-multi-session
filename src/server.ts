@@ -56,6 +56,23 @@ function checkAiRateLimit(key: string): boolean {
   return true; // allowed
 }
 
+// --- SYSTEM ACTIVITY LOGGER ---
+async function logActivity(user: string, action: string, category: 'Auth' | 'System' | 'Billing' | 'Security' | 'Database', level: 'Info' | 'Warning' | 'Error' | 'Critical', ip: string = 'Internal') {
+  try {
+    const db = getFirestore();
+    await db.collection('activity_logs').add({
+      user,
+      action,
+      category,
+      level,
+      ip,
+      time: new Date().toISOString()
+    });
+  } catch (err) {
+    console.error("Critical: Failed to record activity log:", err);
+  }
+}
+
 // Auto-clean maps every 30 min to prevent memory leaks
 setInterval(() => {
   const now = Date.now();
@@ -103,6 +120,7 @@ const checkApiQuota = async (req: express.Request, res: express.Response, next: 
     next();
   } catch (error: any) {
     if (error.message === 'DAILY_QUOTA_EXCEEDED') {
+      logActivity(uid, "Daily API Quota Exceeded", "Billing", "Warning", (req as any).ip || "Unknown");
       return res.status(429).json({
         error: `Daily API Quota Exceeded (${dailyQuota}/day). Please add credits or upgrade for more capacity.`,
         code: "QUOTA_EXCEEDED"
@@ -757,6 +775,12 @@ app.post("/session/start", checkSubscription, async (req: any, res) => {
     if (gender) await (whatsapp as any).adapter.writeData(sessionId, 'gender', 'config', gender);
     if (age) await (whatsapp as any).adapter.writeData(sessionId, 'age', 'config', age);
 
+    // Save custom AI personality data
+    if (instructions) await (whatsapp as any).adapter.writeData(sessionId, 'instructions', 'config', instructions);
+    // ... (rest of the saves)
+
+    logActivity(uid || "Anonymous", `Session Started: ${sessionId}`, "System", "Info", req.ip);
+
     res.json({
       message: `Session ${sessionId} started.`,
       instruction: "Please scan the QR code displayed on the page."
@@ -957,6 +981,8 @@ app.delete("/session/delete/:sessionId", async (req, res) => {
     // Delete session (clears Firebase creds + ends socket)
     await whatsapp.deleteSession(sessionId);
     sessionStatuses.delete(sessionId);
+
+    logActivity(uid || "Unknown", `Session Deleted: ${sessionId}`, "System", "Warning", req.ip);
 
     console.log(`✅ Session '${sessionId}' successfully disconnected and deleted.`);
     res.json({ message: `Session '${sessionId}' has been disconnected.` });
@@ -1386,26 +1412,6 @@ app.get("/owner/logs", async (req, res) => {
 
     let logs = logsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 
-    // If no logs exist, seed some mock ones to match the design initially
-    if (logs.length === 0) {
-      const mockLogs = [
-        { user: "rahul@example.com", action: "User Logout", category: "Auth", level: "Info", ip: "192.168.1.1", time: new Date(now - 1000).toISOString() },
-        { user: "admin@bulkreply.io", action: "Deleted Plan: 'Pro Plus'", category: "System", level: "Warning", ip: "152.12.33.10", time: new Date(now - 30000).toISOString() },
-        { user: "sneha.r@gmail.com", action: "Failed Payment Attemp", category: "Billing", level: "Error", ip: "103.45.12.2", time: new Date(now - 600000).toISOString() },
-        { user: "System", action: "Automated Daily Backup Complete", category: "Database", level: "Info", ip: "Internal", time: new Date(now - 3600000).toISOString() },
-        { user: "amit.p@outlook.com", action: "API Key Created", category: "Security", level: "Info", ip: "45.124.90.11", time: new Date(now - 7200000).toISOString() },
-        { user: "unknown", action: "Brute Force Attempt Detected", category: "Security", level: "Critical", ip: "5.1.22.45", time: new Date(now - 86400000).toISOString() },
-      ];
-      const batch = db.batch();
-      mockLogs.forEach(log => {
-        const docRef = db.collection('activity_logs').doc();
-        batch.set(docRef, log);
-        logs.push({ id: docRef.id, ...log });
-      });
-      await batch.commit();
-      logs.sort((a: any, b: any) => new Date(b.time).getTime() - new Date(a.time).getTime());
-    }
-
     const formattedLogs = logs.map((log: any) => {
       const d = new Date(log.time);
       const formattedTime = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
@@ -1415,10 +1421,10 @@ app.get("/owner/logs", async (req, res) => {
     res.json({
       logs: formattedLogs,
       stats: {
-        logs24h: Math.max(recentLogsSnap.size, formattedLogs.length), // mock high count
-        alerts: Math.max(alertsSnap.size, formattedLogs.filter((l: any) => ['Critical', 'Error', 'Warning'].includes(l.level)).length),
-        queriesPerSec: 205,
-        uptime: "99.99%"
+        logs24h: recentLogsSnap.size || 0,
+        alerts: alertsSnap.size || 0,
+        queriesPerSec: 0, // Placeholder for real health monitoring if available
+        uptime: "100%"
       }
     });
 
@@ -1436,6 +1442,7 @@ app.listen(port, () => {
   console.log(`✅ Server is running on port ${port}`);
   autoConnectActiveAgents();
   startTaskScheduler(); // Start the background task runner
+  startLogCleanup(); // Start the 5-day log cleanup routine
   console.log("--------------------------------------------------");
   console.log(`🚀 BulkReply.io API (Advanced AI v4) running at http://localhost:${port}`);
   console.log("--------------------------------------------------");
@@ -1548,4 +1555,30 @@ function startTaskScheduler() {
       console.error("Scheduler Poll Error:", err);
     }
   }, 60 * 1000);
+}
+
+/**
+ * 🧹 Log Auto-Cleanup (Production Ready)
+ * Runs every 6 hours and deletes logs older than 5 days.
+ */
+function startLogCleanup() {
+  console.log("🧹 Log Cleanup Scheduler started. Keeping last 5 days of history...");
+  setInterval(async () => {
+    try {
+      const db = getFirestore();
+      const fiveDaysAgo = new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString();
+      const oldLogsSnap = await db.collection('activity_logs')
+        .where('time', '<', fiveDaysAgo)
+        .get();
+
+      if (oldLogsSnap.empty) return;
+
+      const batch = db.batch();
+      oldLogsSnap.docs.forEach(doc => batch.delete(doc.ref));
+      await batch.commit();
+      console.log(`♻️ Auto-Cleanup: Successfully deleted ${oldLogsSnap.size} logs older than 5 days.`);
+    } catch (err) {
+      console.error("❌ Auto-Cleanup Error:", err);
+    }
+  }, 6 * 60 * 60 * 1000); // 6 hours interval
 }
