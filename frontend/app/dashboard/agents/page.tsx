@@ -440,73 +440,58 @@ export default function UnifiedAgentsPage() {
     ];
 
     return (
-        <div className="w-full h-full p-4 lg:p-8 flex flex-col items-center bg-slate-50 dark:bg-slate-900 overflow-y-auto">
+        <div className="w-full h-full pb-32 flex flex-col gap-6 items-center bg-slate-50 dark:bg-[#0a0a0a] overflow-y-auto relative">
 
             {/* HEADER & SEARCH BAR */}
             {viewState === 'list' && (
-                <div className="w-full max-w-6xl mb-8 space-y-4 animate-in fade-in slide-in-from-top-4 duration-700">
-                    {/* Mobile Header (Only visible on small screens) */}
-                    <div className="md:hidden flex items-center justify-between mb-4">
-                        <div className="flex items-center gap-2">
-                            <Bot className="w-6 h-6 text-primary" />
-                            <h2 className="text-xl font-black text-slate-900 dark:text-white font-outfit">Agents</h2>
-                        </div>
-                        <button
-                            onClick={() => {
-                                if (isExpired) return setUpgradeModal(true);
-                                if (connectedSessions.length >= (subscription?.maxSessions || 100)) {
-                                    return showToast("Limit Reached", `Your plan has reached its bot capacity.`, "error");
-                                }
-                                resetWizard();
-                                setViewState('type_selection');
-                            }}
-                            className="p-2 bg-primary text-white rounded-xl active:scale-95 shadow-md flex items-center justify-center"
-                        >
-                            <Plus className="w-5 h-5" />
-                        </button>
-                    </div>
-
-                    {/* Desktop Header */}
-                    <div className="hidden md:flex justify-between items-start md:items-center gap-4">
-                        <div>
-                            <div className="flex items-center gap-2 mb-1">
-                                <Bot className="w-6 h-6 text-primary" />
-                                <h2 className="text-3xl font-black text-slate-900 dark:text-white font-outfit">Neural Pipeline</h2>
+                <div className="w-full sticky top-0 z-50 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div className="w-full bg-white/70 dark:bg-[#0a0a0a]/70 backdrop-blur-2xl border-b border-black/5 dark:border-white/5 pt-4 pb-4 lg:pt-6 lg:pb-6 px-4 lg:px-8 flex justify-center">
+                        <div className="w-full max-w-6xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 bg-black/5 dark:bg-white/5 rounded-2xl flex items-center justify-center shrink-0">
+                                    <Bot className="w-6 h-6 text-slate-900 dark:text-slate-100" />
+                                </div>
+                                <div className="flex flex-col justify-center">
+                                    <h2 className="text-xl md:text-2xl font-bold text-slate-900 dark:text-white tracking-tight mb-0.5">Neural Agents</h2>
+                                    <p className="text-slate-500 dark:text-slate-400 text-xs font-medium tracking-wide">Manage your high-performance AI workforce.</p>
+                                </div>
                             </div>
-                            <p className="text-slate-500 text-sm font-semibold tracking-tight">Deploying and managing your high-performance AI workforce.</p>
-                        </div>
-                        <div className="flex flex-col items-end gap-2">
-                            <button
-                                onClick={() => {
-                                    if (isExpired) return setUpgradeModal(true);
-                                    if (connectedSessions.length >= (subscription?.maxSessions || 100)) {
-                                        return showToast("Limit Reached", `Your plan has reached its bot capacity.`, "error");
-                                    }
-                                    resetWizard();
-                                    setViewState('type_selection');
-                                }}
-                                className={`px-8 py-3.5 rounded-2xl font-black flex items-center gap-2 transition-all shadow-xl hover:-translate-y-1 active:scale-95 ${isExpired
-                                    ? 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
-                                    : 'bg-primary text-white shadow-primary/25 hover:bg-indigo-600'
-                                    }`}
-                            >
-                                <Plus className="w-5 h-5" /> Hire New Agent
-                            </button>
-                            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest text-right">
-                                Plan: <span className="text-primary">{subscription?.plan}</span>
-                            </p>
+
+                            <div className="flex items-center gap-4 w-full md:w-auto">
+                                <p className="text-[10px] font-bold uppercase text-slate-400 tracking-widest hidden md:block">
+                                    Plan: <span className="bg-black/5 dark:bg-white/10 text-slate-700 dark:text-slate-200 px-2.5 py-1.5 rounded-lg ml-1">{subscription?.plan || 'Free'}</span>
+                                </p>
+                                <button
+                                    onClick={() => {
+                                        if (isExpired) return setUpgradeModal(true);
+                                        if (connectedSessions.length >= (subscription?.maxSessions || 1)) {
+                                            return setUpgradeModal(true);
+                                        }
+                                        resetWizard();
+                                        setViewState('type_selection');
+                                    }}
+                                    className={`w-full md:w-auto px-6 py-3 font-semibold text-sm flex items-center justify-center gap-2 transition-all rounded-xl ${isExpired
+                                        ? 'bg-black/5 text-slate-400 cursor-not-allowed dark:bg-white/5'
+                                        : 'bg-slate-900 text-white shadow-md shadow-slate-900/10 hover:opacity-90 active:scale-95 dark:bg-white dark:text-slate-900 dark:shadow-white/10'
+                                        }`}
+                                >
+                                    <Plus className="w-4 h-4" /> Hire New Agent
+                                </button>
+                            </div>
                         </div>
                     </div>
 
-                    <div className="relative group mt-2 md:mt-0">
-                        <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-primary transition-colors" />
-                        <input
-                            type="text"
-                            placeholder="Search by Agent Name or Role..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full bg-white dark:bg-slate-800 border-2 border-slate-100 dark:border-slate-700 py-3 md:py-5 pl-14 pr-6 rounded-[1.5rem] outline-none focus:border-primary/50 focus:ring-4 ring-primary/5 transition-all font-bold text-slate-800 dark:text-white placeholder:text-slate-300 shadow-sm"
-                        />
+                    <div className="w-full px-4 lg:px-8 max-w-6xl mx-auto mt-6">
+                        <div className="relative group w-full">
+                            <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 group-focus-within:text-slate-900 dark:group-focus-within:text-white transition-colors" />
+                            <input
+                                type="text"
+                                placeholder="Search by Agent Name or Role..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full bg-white dark:bg-[#1a1a1a] border border-black/5 dark:border-white/10 py-3.5 md:py-4 pl-14 pr-6 rounded-2xl outline-none focus:border-black/20 dark:focus:border-white/30 focus:shadow-sm transition-all font-medium text-slate-800 dark:text-white placeholder:text-slate-400"
+                            />
+                        </div>
                     </div>
                 </div>
             )}
@@ -1258,89 +1243,75 @@ export default function UnifiedAgentsPage() {
                 )}
             </AnimatePresence>
 
-            {/* ─── Duplicate Number Popup Modal ─── */}
+            {/* ─── Premium Upgrade Modal ─── */}
             <AnimatePresence>
-                {duplicateModal.isOpen && (
+                {upgradeModal && (
                     <motion.div
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        className="fixed inset-0 z-[999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-                        onClick={() => { setDuplicateModal({ isOpen: false, lang: 'en' }); resetWizard(); }}
+                        className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-900/60 backdrop-blur-xl p-4"
+                        onClick={() => setUpgradeModal(false)}
                     >
                         <motion.div
-                            initial={{ scale: 0.85, opacity: 0, y: 30 }}
+                            initial={{ scale: 0.9, opacity: 0, y: 40 }}
                             animate={{ scale: 1, opacity: 1, y: 0 }}
-                            exit={{ scale: 0.85, opacity: 0, y: 30 }}
-                            transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+                            exit={{ scale: 0.9, opacity: 0, y: 40 }}
                             onClick={(e) => e.stopPropagation()}
-                            className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border border-slate-100 dark:border-slate-700"
+                            className="bg-white dark:bg-slate-800 rounded-[3rem] shadow-[0_32px_128px_-16px_rgba(0,0,0,0.3)] max-w-lg w-full overflow-hidden border border-slate-100 dark:border-slate-700 relative"
                         >
-                            {/* Header */}
-                            <div className="bg-gradient-to-r from-rose-500 to-orange-500 px-6 py-5 flex items-center gap-3">
-                                <div className="bg-white/20 rounded-xl p-2">
-                                    <AlertTriangle className="w-6 h-6 text-white" />
+                            {/* Decorative Background */}
+                            <div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-br from-primary/10 to-transparent -z-10" />
+
+                            {/* Close Button */}
+                            <button
+                                onClick={() => setUpgradeModal(false)}
+                                className="absolute top-6 right-6 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 transition-all"
+                            >
+                                <X size={20} strokeWidth={3} />
+                            </button>
+
+                            <div className="p-10 text-center">
+                                <div className="w-24 h-24 bg-gradient-to-br from-indigo-500 to-primary rounded-[2.5rem] flex items-center justify-center text-white mx-auto mb-8 shadow-2xl shadow-primary/30 rotate-3 hover:rotate-0 transition-transform duration-500">
+                                    <Sparkles className="w-12 h-12" />
                                 </div>
-                                <div>
-                                    <h3 className="text-white font-black text-lg tracking-tight">
-                                        {duplicateModal.lang === 'en' ? 'Number Already Linked!' : 'नंबर पहले से जुड़ा है!'}
-                                    </h3>
-                                    <p className="text-white/70 text-xs font-medium">
-                                        {duplicateModal.lang === 'en' ? 'Duplicate WhatsApp detected' : 'Duplicate WhatsApp पकड़ा गया'}
+
+                                <h3 className="text-3xl font-black text-slate-900 dark:text-white mb-4 font-outfit leading-tight">
+                                    Upgrade Your Pipeline
+                                </h3>
+
+                                <div className="space-y-4 mb-10">
+                                    <p className="text-slate-500 dark:text-slate-400 text-sm font-bold leading-relaxed px-4">
+                                        Your current <strong>{subscription?.plan || 'Free'}</strong> plan has reached its bot limit. Upgrade now to deploy more high-performance neural agents.
                                     </p>
+
+                                    <div className="bg-slate-50 dark:bg-slate-900/50 rounded-2xl p-4 border border-slate-100 dark:border-slate-700">
+                                        <p className="text-[11px] font-black uppercase text-primary tracking-widest mb-1">Recommended Action</p>
+                                        <p className="text-xs text-slate-600 dark:text-slate-300 font-bold">अपना प्लान अभी 1 महीने के लिए रिचार्ज करें और अनलिमिटेड बोट्स का आनंद लें।</p>
+                                    </div>
+                                </div>
+
+                                <div className="flex flex-col gap-3">
+                                    <Link
+                                        href="/dashboard/profile/subscription"
+                                        onClick={() => setUpgradeModal(false)}
+                                        className="w-full py-4 bg-primary hover:bg-indigo-600 text-white rounded-[1.25rem] font-black shadow-xl shadow-primary/20 transition-all hover:-translate-y-1 active:scale-95 text-xs uppercase tracking-widest flex items-center justify-center gap-2"
+                                    >
+                                        <ShieldCheck className="w-4 h-4" /> Upgrade My Plan Now
+                                    </Link>
+                                    <button
+                                        onClick={() => setUpgradeModal(false)}
+                                        className="w-full py-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 font-black text-[10px] uppercase tracking-widest transition-all"
+                                    >
+                                        Maybe Later
+                                    </button>
                                 </div>
                             </div>
 
-                            {/* Body */}
-                            <div className="px-6 py-5 space-y-4">
-                                {duplicateModal.lang === 'en' ? (
-                                    <ul className="space-y-3 text-sm text-slate-700 dark:text-slate-300">
-                                        <li className="flex gap-3 items-start">
-                                            <span className="bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shrink-0 mt-0.5">1</span>
-                                            <span><strong>What happened:</strong> The WhatsApp number you just scanned is already connected to another agent in your account.</span>
-                                        </li>
-                                        <li className="flex gap-3 items-start">
-                                            <span className="bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shrink-0 mt-0.5">2</span>
-                                            <span><strong>Rule:</strong> One WhatsApp number can only be linked to one agent at a time.</span>
-                                        </li>
-                                        <li className="flex gap-3 items-start">
-                                            <span className="bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shrink-0 mt-0.5">3</span>
-                                            <span><strong>What to do:</strong> Either <u>delete the existing agent</u> that uses this number, or <u>use a different WhatsApp number</u> for the new agent.</span>
-                                        </li>
-                                    </ul>
-                                ) : (
-                                    <ul className="space-y-3 text-sm text-slate-700 dark:text-slate-300">
-                                        <li className="flex gap-3 items-start">
-                                            <span className="bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shrink-0 mt-0.5">1</span>
-                                            <span><strong>क्या हुआ:</strong> जो WhatsApp नंबर आपने अभी स्कैन किया, वो पहले से आपके दूसरे agent में जुड़ा हुआ है।</span>
-                                        </li>
-                                        <li className="flex gap-3 items-start">
-                                            <span className="bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shrink-0 mt-0.5">2</span>
-                                            <span><strong>नियम:</strong> एक WhatsApp नंबर = सिर्फ एक agent। एक नंबर दो agent में नहीं चल सकता।</span>
-                                        </li>
-                                        <li className="flex gap-3 items-start">
-                                            <span className="bg-rose-100 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 rounded-full w-6 h-6 flex items-center justify-center text-xs font-black shrink-0 mt-0.5">3</span>
-                                            <span><strong>क्या करें:</strong> पहले <u>पुराना agent delete करें</u> जो इस नंबर से जुड़ा है, या <u>दूसरा WhatsApp नंबर</u> इस्तेमाल करें।</span>
-                                        </li>
-                                    </ul>
-                                )}
-                            </div>
-
-                            {/* Footer */}
-                            <div className="px-6 py-4 bg-slate-50 dark:bg-slate-900/50 flex items-center justify-between border-t border-slate-100 dark:border-slate-700">
-                                <button
-                                    onClick={() => setDuplicateModal(prev => ({ ...prev, lang: prev.lang === 'en' ? 'hi' : 'en' }))}
-                                    className="flex items-center gap-2 text-xs font-bold text-primary hover:underline underline-offset-4 transition-all"
-                                >
-                                    <Languages className="w-4 h-4" />
-                                    {duplicateModal.lang === 'en' ? 'हिंदी में देखें' : 'View in English'}
-                                </button>
-                                <button
-                                    onClick={() => { setDuplicateModal({ isOpen: false, lang: 'en' }); resetWizard(); }}
-                                    className="bg-gradient-to-r from-rose-500 to-orange-500 text-white px-6 py-2.5 rounded-xl font-black text-xs uppercase tracking-widest hover:shadow-lg hover:shadow-rose-500/20 transition-all"
-                                >
-                                    Got It
-                                </button>
+                            {/* Trust Badge */}
+                            <div className="bg-slate-50 dark:bg-slate-900/80 py-4 px-10 border-t border-slate-100 dark:border-slate-700 flex justify-center gap-6">
+                                <span className="text-[9px] font-black uppercase text-slate-400 flex items-center gap-1.5"><ShieldCheck className="w-3 h-3" /> Secure Payment</span>
+                                <span className="text-[9px] font-black uppercase text-slate-400 flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3" /> Instant Activation</span>
                             </div>
                         </motion.div>
                     </motion.div>

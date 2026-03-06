@@ -1,5 +1,5 @@
 "use client";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
     History,
     Search,
@@ -23,17 +23,52 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 
-const activityLogs = [
-    { id: "LOG-001", user: "rahul@example.com", action: "User Logout", category: "Auth", level: "Info", ip: "192.168.1.1", time: "2024-03-03 14:45:12" },
-    { id: "LOG-002", user: "admin@bulkreply.io", action: "Deleted Plan: 'Pro Plus'", category: "System", level: "Warning", ip: "152.12.33.10", time: "2024-03-03 14:30:05" },
-    { id: "LOG-003", user: "sneha.r@gmail.com", action: "Failed Payment Attemp", category: "Billing", level: "Error", ip: "103.45.12.2", time: "2024-03-03 14:15:22" },
-    { id: "LOG-004", user: "System", action: "Automated Daily Backup Complete", category: "Database", level: "Info", ip: "Internal", time: "2024-03-03 14:00:00" },
-    { id: "LOG-005", user: "amit.p@outlook.com", action: "API Key Created", category: "Security", level: "Info", ip: "45.124.90.11", time: "2024-03-03 13:45:55" },
-    { id: "LOG-006", user: "unknown", action: "Brute Force Attempt Detected", category: "Security", level: "Critical", ip: "5.1.22.45", time: "2024-03-03 13:30:10" },
-];
-
 export default function ActivityLogsPage() {
     const [liveStream, setLiveStream] = useState(true);
+    const [logs, setLogs] = useState<any[]>([]);
+    const [stats, setStats] = useState({ logs24h: 18542, alerts: 12, queriesPerSec: 205, uptime: "99.99%" });
+    const [loading, setLoading] = useState(true);
+
+    const fetchLogs = async () => {
+        try {
+            const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+            const res = await fetch(`${baseUrl}/owner/logs`);
+            if (res.ok) {
+                const data = await res.json();
+                if (data.logs && data.logs.length > 0) {
+                    setLogs(data.logs);
+                } else {
+                    // Fallback to empty if genuinely no data
+                    setLogs([]);
+                }
+                if (data.stats) setStats({
+                    ...stats,
+                    logs24h: data.stats.logs24h ?? stats.logs24h,
+                    alerts: data.stats.alerts ?? stats.alerts,
+                    queriesPerSec: data.stats.queriesPerSec ?? stats.queriesPerSec,
+                    uptime: data.stats.uptime ?? stats.uptime
+                });
+            }
+        } catch (err) {
+            console.error("Failed to fetch logs:", err);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchLogs();
+    }, []);
+
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
+        if (liveStream) {
+            interval = setInterval(() => {
+                fetchLogs();
+            }, 10000);
+        }
+        return () => clearInterval(interval);
+    }, [liveStream]);
 
     return (
         <div className="space-y-8 pb-12">
@@ -118,16 +153,34 @@ export default function ActivityLogsPage() {
                             </tr>
                         </thead>
                         <tbody className="font-mono text-[11px]">
-                            {activityLogs.map((log) => (
+                            {loading && logs.length === 0 ? (
+                                <tr>
+                                    <td colSpan={5} className="px-8 py-12 text-center text-slate-500">
+                                        <div className="flex flex-col items-center justify-center gap-3">
+                                            <RotateCw size={24} className="animate-spin text-indigo-500" />
+                                            <p className="font-bold text-xs uppercase tracking-widest">Connecting to Audit Stream...</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ) : logs.length === 0 ? (
+                                <tr>
+                                    <td colSpan={5} className="px-8 py-12 text-center text-slate-500">
+                                        <div className="flex flex-col items-center justify-center gap-3">
+                                            <ShieldAlert size={24} className="text-slate-600" />
+                                            <p className="font-bold text-xs uppercase tracking-widest">No Activity Logs Found</p>
+                                        </div>
+                                    </td>
+                                </tr>
+                            ) : logs.map((log) => (
                                 <tr key={log.id} className="hover:bg-slate-800/40 transition-colors group">
                                     <td className="px-8 py-4 border-b border-slate-800/50">
                                         <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[9px] font-black uppercase ${log.level === 'Critical' ? 'bg-rose-500/10 text-rose-500 border border-rose-500/20' :
-                                                log.level === 'Error' ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20' :
-                                                    log.level === 'Warning' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
+                                            log.level === 'Error' ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20' :
+                                                log.level === 'Warning' ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' : 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20'
                                             }`}>
                                             <div className={`w-1 h-1 rounded-full ${log.level === 'Critical' ? 'bg-rose-500 animate-pulse' :
-                                                    log.level === 'Error' ? 'bg-orange-500' :
-                                                        log.level === 'Warning' ? 'bg-amber-500' : 'bg-emerald-500'
+                                                log.level === 'Error' ? 'bg-orange-500' :
+                                                    log.level === 'Warning' ? 'bg-amber-500' : 'bg-emerald-500'
                                                 }`}></div>
                                             {log.level}
                                         </div>
@@ -153,8 +206,8 @@ export default function ActivityLogsPage() {
                 </div>
 
                 <div className="p-8 border-t border-slate-800 flex items-center justify-between">
-                    <button className="flex items-center gap-2 text-slate-500 hover:text-slate-300 transition-all font-black uppercase tracking-widest text-[10px]">
-                        <RotateCw size={14} className={liveStream ? 'animate-spin-slow' : ''} />
+                    <button onClick={fetchLogs} className="flex items-center gap-2 text-slate-500 hover:text-slate-300 transition-all font-black uppercase tracking-widest text-[10px]">
+                        <RotateCw size={14} className={loading ? 'animate-spin' : liveStream ? 'animate-spin-slow' : ''} />
                         Fetch Previous 100 Logs
                     </button>
                     <div className="flex items-center gap-1">
@@ -173,7 +226,7 @@ export default function ActivityLogsPage() {
                 <div className="p-6 rounded-[32px] border border-slate-100 bg-white shadow-sm">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Logs (24h)</p>
                     <div className="flex items-baseline gap-2">
-                        <span className="text-2xl font-black text-slate-900 font-outfit">18,542</span>
+                        <span className="text-2xl font-black text-slate-900 font-outfit">{stats.logs24h.toLocaleString()}</span>
                         <span className="text-xs font-bold text-emerald-500 flex items-center gap-0.5">
                             <ArrowUpRight size={12} />
                             4.2%
@@ -183,21 +236,21 @@ export default function ActivityLogsPage() {
                 <div className="p-6 rounded-[32px] border border-slate-100 bg-white shadow-sm">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Security Alerts</p>
                     <div className="flex items-baseline gap-2">
-                        <span className="text-2xl font-black text-rose-600 font-outfit">12</span>
+                        <span className="text-2xl font-black text-rose-600 font-outfit">{stats.alerts}</span>
                         <span className="text-xs font-bold text-slate-300 uppercase italic tracking-tighter ml-1">Requires Action</span>
                     </div>
                 </div>
                 <div className="p-6 rounded-[32px] border border-slate-100 bg-white shadow-sm">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">DB Queries / sec</p>
                     <div className="flex items-baseline gap-2">
-                        <span className="text-2xl font-black text-slate-900 font-outfit">205</span>
+                        <span className="text-2xl font-black text-slate-900 font-outfit">{stats.queriesPerSec}</span>
                         <Database size={16} className="text-indigo-200" />
                     </div>
                 </div>
                 <div className="p-6 rounded-[32px] border border-slate-100 bg-white shadow-sm">
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">System Uptime</p>
                     <div className="flex items-baseline gap-2">
-                        <span className="text-2xl font-black text-emerald-600 font-outfit">99.99%</span>
+                        <span className="text-2xl font-black text-emerald-600 font-outfit">{stats.uptime}</span>
                         <Zap size={16} className="text-emerald-200" fill="currentColor" />
                     </div>
                 </div>

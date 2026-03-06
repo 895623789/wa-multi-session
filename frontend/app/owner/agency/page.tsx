@@ -10,6 +10,7 @@ import { db } from "@/lib/firebase";
 import { collection, query, onSnapshot, addDoc, serverTimestamp, deleteDoc, doc, updateDoc, getDoc } from "firebase/firestore";
 import { useAuth } from "@/components/AuthProvider";
 import Link from "next/link";
+import { toast } from "@/components/Toast";
 
 interface AgencyClient {
     id: string;
@@ -35,6 +36,7 @@ export default function AgencyPortal() {
 
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
     const [editClientId, setEditClientId] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
 
     // Form State
     const [formData, setFormData] = useState({
@@ -64,6 +66,8 @@ export default function AgencyPortal() {
 
     const handleAddClient = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (isSubmitting) return;
+        setIsSubmitting(true);
         try {
             const expiryDate = new Date();
             expiryDate.setDate(expiryDate.getDate() + 3); // 3 days default trial for agency clients
@@ -77,8 +81,12 @@ export default function AgencyPortal() {
             });
             setIsAddModalOpen(false);
             setFormData({ name: "", businessName: "", location: "", purpose: "", monthlyFee: 1500, notes: "" });
+            toast("Success", "Client registered successfully", "success");
         } catch (error) {
             console.error("Error adding client:", error);
+            toast("Error", "Failed to register client", "error");
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -97,7 +105,8 @@ export default function AgencyPortal() {
 
     const handleUpdateClient = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!editClientId) return;
+        if (!editClientId || isSubmitting) return;
+        setIsSubmitting(true);
 
         try {
             await updateDoc(doc(db, "agencyClients", editClientId), {
@@ -107,8 +116,12 @@ export default function AgencyPortal() {
             setIsEditModalOpen(false);
             setEditClientId(null);
             setFormData({ name: "", businessName: "", location: "", purpose: "", monthlyFee: 1500, notes: "" });
+            toast("Success", "Client details updated", "success");
         } catch (error) {
             console.error("Error updating client:", error);
+            toast("Error", "Failed to update client", "error");
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -137,23 +150,29 @@ export default function AgencyPortal() {
     };
 
     const deleteClient = async (id: string) => {
-        if (confirm("Are you sure you want to delete this agency client? All historical data for this client will be lost.")) {
-            try {
-                // Bulk delete sessions from backend first to clear RAM
-                const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
-                await fetch(`${baseUrl}/session/bulk-delete`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ prefix: `agency_${id}` })
-                }).catch(e => console.error("Bulk delete failed", e));
+        if (isSubmitting) return;
+        setIsSubmitting(true);
+        try {
+            // Bulk delete sessions from backend first to clear RAM
+            const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+            await fetch(`${baseUrl}/session/bulk-delete`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ prefix: `agency_${id}` })
+            }).catch(e => console.error("Bulk delete failed", e));
 
-                // Then delete from Firestore
-                await deleteDoc(doc(db, "agencyClients", id));
-                // Optional: also delete their agents collection doc
-                await deleteDoc(doc(db, "agencyAgents", id)).catch(() => { });
-            } catch (error) {
-                console.error("Error deleting client:", error);
-            }
+            // Then delete from Firestore
+            await deleteDoc(doc(db, "agencyClients", id));
+            // Optional: also delete their agents collection doc
+            await deleteDoc(doc(db, "agencyAgents", id)).catch(() => { });
+
+            setDeleteModal({ ...deleteModal, isOpen: false });
+            toast("Success", "Client deleted successfully", "success");
+        } catch (error) {
+            console.error("Error deleting client:", error);
+            toast("Error", "Failed to delete client", "error");
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -265,9 +284,10 @@ export default function AgencyPortal() {
                             <div className="flex flex-col gap-3">
                                 <button
                                     onClick={() => deleteClient(deleteModal.client!.id)}
-                                    className="w-full py-4 bg-rose-500 hover:bg-rose-600 text-white rounded-[1.25rem] font-black shadow-xl shadow-rose-500/20 transition-all hover:-translate-y-1 active:scale-95 text-xs uppercase tracking-widest"
+                                    disabled={isSubmitting}
+                                    className="w-full py-4 bg-rose-500 hover:bg-rose-600 text-white rounded-[1.25rem] font-black shadow-xl shadow-rose-500/20 transition-all hover:-translate-y-1 active:scale-95 text-xs uppercase tracking-widest disabled:opacity-70 disabled:cursor-not-allowed"
                                 >
-                                    {deleteModal.lang === 'hi' ? "हाँ, डिलीट करें" : "Confirm Delete"}
+                                    {isSubmitting ? (deleteModal.lang === 'hi' ? "प्रोसेस हो रहा है..." : "Processing...") : (deleteModal.lang === 'hi' ? "हाँ, डिलीट करें" : "Confirm Delete")}
                                 </button>
                                 <button
                                     onClick={() => setDeleteModal({ ...deleteModal, isOpen: false })}
@@ -448,9 +468,10 @@ export default function AgencyPortal() {
 
                                 <button
                                     type="submit"
-                                    className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[1.5rem] font-black text-base shadow-xl shadow-indigo-200 transition-all active:scale-[0.98] mt-4"
+                                    disabled={isSubmitting}
+                                    className="w-full py-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-[1.5rem] font-black text-base shadow-xl shadow-indigo-200 transition-all active:scale-[0.98] mt-4 disabled:opacity-70 disabled:cursor-not-allowed"
                                 >
-                                    {isEditModalOpen ? "Save Changes" : "Confirm Registration"}
+                                    {isSubmitting ? "Processing..." : isEditModalOpen ? "Save Changes" : "Confirm Registration"}
                                 </button>
                             </form>
                         </motion.div>
