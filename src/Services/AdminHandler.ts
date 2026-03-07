@@ -298,7 +298,7 @@ RULES:
             if (fc.name === 'generateImage') {
                 const args = fc.args as { prompt: string };
                 try {
-                    const imageModel = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp-image-generation' });
+                    const imageModel = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
                     const imgResult = await imageModel.generateContent({
                         contents: [{ role: 'user', parts: [{ text: args.prompt }] }],
                         generationConfig: { responseModalities: ['IMAGE', 'TEXT'] } as any

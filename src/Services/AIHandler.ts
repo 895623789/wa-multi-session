@@ -294,7 +294,7 @@ ${customInstructions ? customInstructions : "No custom instructions. Focus stric
 
     try {
         const model = genAI.getGenerativeModel({
-            model: 'gemini-2.0-flash-lite',
+            model: 'gemini-2.0-flash',
             systemInstruction: systemPrompt,
             tools: tools as any
         });
@@ -363,7 +363,7 @@ export async function generateOutreach(
 
     try {
         const model = genAI.getGenerativeModel({
-            model: 'gemini-2.0-flash-lite',
+            model: 'gemini-2.0-flash',
             systemInstruction: (customInstructions || "You are an elite Business Growth Specialist and professional outreach expert.") + "\n\n" +
                 "STRATEGIC FORMATTING RULES:\n" +
                 "1. POWERFUL BOLDING: Bold ONLY the most important value propositions, keywords, or benefits (e.g. *20% discount*, *Instant Setup*, *Zero Maintenance*).\n" +
