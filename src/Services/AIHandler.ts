@@ -28,7 +28,47 @@ export async function generateImageFromPrompt(prompt: string): Promise<string | 
         return null;
     }
 }
+const DEFAULT_MODEL = 'gemini-2.0-flash';
+let currentGlobalModel = DEFAULT_MODEL;
 
+async function getGlobalModel(): Promise<string> {
+    try {
+        const doc = await getFirestore().collection('system_settings').doc('ai_config').get();
+        if (doc.exists) {
+            return doc.data()?.currentModel || DEFAULT_MODEL;
+        }
+    } catch (err) {
+        console.error("Error fetching global model:", err);
+    }
+    return DEFAULT_MODEL;
+}
+
+// ─── Pricing Data (INR per 1M tokens) ───────────────────────────────────────
+const PRICING: Record<string, { input: number, output: number }> = {
+    'gemini-2.0-flash': { input: 8.3, output: 33.2 },
+    'gemini-2.0-flash-lite': { input: 6.2, output: 24.9 },
+    'gemini-flash-latest': { input: 3.1, output: 12.4 }, // 1.5 Flash
+    'gemini-flash-lite-latest': { input: 1.25, output: 5.0 }, // 1.5 Flash-8B
+    'gemini-pro-latest': { input: 104.0, output: 416.0 }, // 1.5 Pro
+};
+
+async function trackUsage(model: string, inputTokens: number, outputTokens: number) {
+    try {
+        const pricing = PRICING[model] || PRICING['gemini-2.0-flash'];
+        const cost = ((inputTokens / 1000000) * pricing.input) + ((outputTokens / 1000000) * pricing.output);
+
+        const { FieldValue } = await import('firebase-admin/firestore');
+        await getFirestore().collection('usage_stats').doc(model).set({
+            totalInputTokens: FieldValue.increment(inputTokens),
+            totalOutputTokens: FieldValue.increment(outputTokens),
+            totalCostINR: FieldValue.increment(cost),
+            totalRequests: FieldValue.increment(1),
+            lastUsed: Date.now()
+        }, { merge: true });
+    } catch (err) {
+        console.error("Error tracking AI usage:", err);
+    }
+}
 
 // ─── Gemini API Setup ───────────────────────────────────────────────────────
 const apiKey = process.env.GEMINI_API_KEY || '';
@@ -242,6 +282,9 @@ export async function generateAutoReply(
 ): Promise<{ text: string, toolCalls?: any[] } | null> {
     if (!genAI) return null;
 
+    // Fetch global model dynamically
+    const modelToUse = await getGlobalModel();
+
     // Build the role context
     let roleContext: string;
 
@@ -313,7 +356,7 @@ ${customInstructions ? customInstructions : "No custom instructions. Focus stric
 
     try {
         const model = genAI.getGenerativeModel({
-            model: 'gemini-2.0-flash',
+            model: modelToUse,
             systemInstruction: systemPrompt,
             tools: tools as any
         });
@@ -360,6 +403,12 @@ ${customInstructions ? customInstructions : "No custom instructions. Focus stric
             { role: 'model', text: aiText, ts: Date.now() }
         );
         await saveHistory(key, history);
+
+        // Track Usage
+        const usage = result.response.usageMetadata;
+        if (usage) {
+            await trackUsage(modelToUse, usage.promptTokenCount || 0, usage.candidatesTokenCount || 0);
+        }
 
         return {
             text: aiText,

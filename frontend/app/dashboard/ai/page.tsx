@@ -109,6 +109,9 @@ export default function NeuralAdminPage() {
     const [editingTitleId, setEditingTitleId] = useState<string | null>(null);
     const [editTitleText, setEditTitleText] = useState("");
     const [agentNames, setAgentNames] = useState<Record<string, string>>({});
+    const [currentModel, setCurrentModel] = useState("gemini-2.0-flash");
+    const [showModelMenu, setShowModelMenu] = useState(false);
+    const [usageStats, setUsageStats] = useState<Record<string, any>>({});
     const { user } = useAuth();
 
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -154,6 +157,96 @@ export default function NeuralAdminPage() {
         };
         fetchNames();
     }, [user?.uid]);
+
+    // Fetch Global Model Setting
+    useEffect(() => {
+        const fetchAiConfig = async () => {
+            try {
+                const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+                const res = await fetch(`${baseUrl}/admin/settings/ai-config`);
+                const data = await res.json();
+                if (data.currentModel) setCurrentModel(data.currentModel);
+            } catch (err) {
+                console.error("Failed to fetch AI config:", err);
+            }
+        };
+        fetchAiConfig();
+    }, []);
+
+    // Fetch Usage Stats
+    useEffect(() => {
+        const fetchUsage = async () => {
+            try {
+                const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+                const res = await fetch(`${baseUrl}/admin/stats/usage`);
+                const data = await res.json();
+                setUsageStats(data);
+            } catch (err) {
+                console.error("Failed to fetch usage stats:", err);
+            }
+        };
+        fetchUsage();
+        // Refresh usage stats whenever model menu is opened
+        if (showModelMenu) fetchUsage();
+    }, [showModelMenu]);
+
+    const updateGlobalModel = async (model: string) => {
+        setCurrentModel(model);
+        setShowModelMenu(false);
+        try {
+            const baseUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+            await fetch(`${baseUrl}/admin/settings/ai-config`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ currentModel: model })
+            });
+        } catch (err) {
+            console.error("Failed to update AI model:", err);
+        }
+    };
+
+    const AI_MODELS = [
+        {
+            id: "gemini-2.0-flash",
+            name: "2.0 Flash (Default)",
+            desc: "Smartest & Multi-modal",
+            price: "Standard",
+            costStat: "Cost: ₹100",
+            note: "Base Price (100% usage)"
+        },
+        {
+            id: "gemini-2.0-flash-lite",
+            name: "2.0 Flash-Lite",
+            desc: "Ultra Fast",
+            price: "Cheap",
+            costStat: "Cost: ₹75",
+            note: "25% Savings vs Default"
+        },
+        {
+            id: "gemini-flash-latest",
+            name: "Gemini 1.5 Flash",
+            desc: "Proven & Stable",
+            price: "Stable",
+            costStat: "Cost: ₹40",
+            note: "60% Savings vs Default"
+        },
+        {
+            id: "gemini-flash-lite-latest",
+            name: "Flash-Lite (8B)",
+            desc: "Small & Instant",
+            price: "Cheapest",
+            costStat: "Cost: ₹15",
+            note: "85% Savings vs Default"
+        },
+        {
+            id: "gemini-pro-latest",
+            name: "Gemini 1.5 Pro",
+            desc: "Deep Reasoning",
+            price: "Premium",
+            costStat: "Cost: ₹2500",
+            note: "High Cost for Pro work"
+        },
+    ];
 
     const saveStateToLocal = (id: string, msgs: Message[], titleFallback: string) => {
         setSessions(prev => {
@@ -438,6 +531,47 @@ export default function NeuralAdminPage() {
                 </div>
 
                 <div className="flex items-center gap-1.5">
+                    {/* Model Switcher */}
+                    <div className="relative">
+                        <button
+                            onClick={() => setShowModelMenu(!showModelMenu)}
+                            className="flex items-center gap-1.5 px-2 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-all text-[11px] font-bold text-slate-700"
+                        >
+                            <BrainCircuit className="w-3.5 h-3.5 text-blue-600" />
+                            <span className="max-w-[80px] truncate">{AI_MODELS.find(m => m.id === currentModel)?.name || currentModel}</span>
+                        </button>
+
+                        {showModelMenu && (
+                            <>
+                                <div className="fixed inset-0 z-40" onClick={() => setShowModelMenu(false)} />
+                                <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-xl shadow-xl z-50 p-1.5 animate-in fade-in zoom-in-95 duration-100">
+                                    <p className="px-2.5 py-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Select AI Intelligence</p>
+                                    {AI_MODELS.map(m => (
+                                        <button
+                                            key={m.id}
+                                            onClick={() => updateGlobalModel(m.id)}
+                                            className={`w-full text-left p-2.5 rounded-lg transition-colors flex flex-col gap-0.5 mb-0.5 ${currentModel === m.id ? 'bg-blue-50 border border-blue-100' : 'hover:bg-slate-50 border border-transparent'}`}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <span className={`text-xs font-bold ${currentModel === m.id ? 'text-blue-700' : 'text-slate-700'}`}>{m.name}</span>
+                                                <div className="flex flex-col items-end">
+                                                    <span className={`text-[10px] font-black ${m.id === 'gemini-flash-lite-latest' ? 'text-emerald-600' : 'text-slate-500'}`}>{m.costStat}</span>
+                                                    {usageStats[m.id] && (
+                                                        <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1 rounded">Spent: ₹{usageStats[m.id].totalCostINR.toFixed(2)}</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-[10px] text-slate-500">{m.desc}</span>
+                                                <span className="text-[9px] font-medium text-slate-400 italic">{m.note}</span>
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </>
+                        )}
+                    </div>
+
                     <button
                         onClick={() => setShowHistory(true)}
                         className="p-2 flex items-center gap-1.5 text-slate-600 hover:bg-slate-100 hover:text-slate-900 rounded-lg transition-colors font-medium text-sm"

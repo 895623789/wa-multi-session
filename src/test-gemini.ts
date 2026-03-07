@@ -1,22 +1,26 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
 const key = "AIzaSyC58XAkjAyNoIBngTLIXCXrArb2kfcdEeU";
-const MODELS = ["gemini-2.0-flash", "gemini-1.5-flash"];
+const MODELS = [
+    { id: "gemini-2.0-flash", name: "2.0 Flash" },
+    { id: "gemini-2.0-flash-lite", name: "2.0 Flash-Lite" },
+    { id: "gemini-flash-latest", name: "Flash Latest" },
+    { id: "gemini-flash-lite-latest", name: "Flash-Lite Latest" }
+];
 
 async function runDiagnostics() {
-    console.log("=== GEMINI API LATEST KEY TEST ===");
-    console.log(`Testing Key: ${key.substring(0, 10)}...`);
+    console.log("=== TESTING AVAILABLE MODELS ===");
     const genAI = new GoogleGenerativeAI(key);
 
     for (const m of MODELS) {
-        process.stdout.write(`  -> Model ${m}: `);
+        process.stdout.write(`Testing Model: ${m.name} (${m.id})... `);
         try {
-            const model = genAI.getGenerativeModel({ model: m });
+            const model = genAI.getGenerativeModel({ model: m.id });
             const result = await model.generateContent("Hi");
-            const response = await result.response;
-            console.log("✅ OK - " + response.text().substring(0, 50).replace(/\n/g, ' ') + "...");
+            await result.response;
+            console.log(`✅ OK`);
         } catch (err: any) {
-            console.log(`❌ ERROR: ${err.message.split('\n')[0].substring(0, 100)}`);
+            console.log(`❌ FAILED: ${err.message.split('\n')[0]}`);
         }
     }
 }

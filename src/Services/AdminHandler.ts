@@ -138,15 +138,41 @@ export async function generateAdminReply(
     stats: SystemStats,
     file?: FileAttachment,
     callbacks?: AdminCallbacks,
-    history?: any[]
+    history?: any[],
+    modelOverride?: string
 ): Promise<AgentReply> {
+    const PRICING: Record<string, { input: number, output: number }> = {
+        'gemini-2.0-flash': { input: 8.3, output: 33.2 },
+        'gemini-2.0-flash-lite': { input: 6.2, output: 24.9 },
+        'gemini-flash-latest': { input: 3.1, output: 12.4 },
+        'gemini-flash-lite-latest': { input: 1.25, output: 5.0 },
+        'gemini-pro-latest': { input: 104.0, output: 416.0 },
+    };
+
+    const trackAdminUsage = async (model: string, input: number, output: number) => {
+        try {
+            const pricing = PRICING[model] || PRICING['gemini-2.0-flash'];
+            const cost = ((input / 1000000) * pricing.input) + ((output / 1000000) * pricing.output);
+            const { getFirestore, FieldValue } = await import('firebase-admin/firestore');
+            const db = getFirestore();
+            await db.collection('usage_stats').doc(model).set({
+                totalInputTokens: FieldValue.increment(input),
+                totalOutputTokens: FieldValue.increment(output),
+                totalCostINR: FieldValue.increment(cost),
+                totalRequests: FieldValue.increment(1),
+                lastUsed: Date.now()
+            }, { merge: true });
+        } catch (e) { console.error("Admin usage track error:", e); }
+    };
+
     try {
+        const modelToUse = modelOverride || 'gemini-2.0-flash';
         const botNamesContext = stats.agentNames
             ? Object.entries(stats.agentNames).map(([id, name]) => `- **${name}** (ID: ${id})`).join('\n')
             : 'None';
 
         const model = genAI.getGenerativeModel({
-            model: 'gemini-2.0-flash',
+            model: modelToUse,
             systemInstruction: `You are the BulkReply.io AI Agent — a powerful multimodal assistant.
 
 CURRENT SYSTEM STATE:
@@ -211,6 +237,12 @@ RULES:
         const response = result.response;
         const candidate = response.candidates?.[0];
         if (!candidate) return { text: "No response from AI." };
+
+        // Track Usage
+        const usage = response.usageMetadata;
+        if (usage) {
+            await trackAdminUsage(modelToUse, usage.promptTokenCount || 0, usage.candidatesTokenCount || 0);
+        }
 
         // Check for function calls
         const functionCalls = candidate.content?.parts?.filter(p => p.functionCall);
@@ -298,7 +330,7 @@ RULES:
             if (fc.name === 'generateImage') {
                 const args = fc.args as { prompt: string };
                 try {
-                    const imageModel = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+                    const imageModel = genAI.getGenerativeModel({ model: modelToUse });
                     const imgResult = await imageModel.generateContent({
                         contents: [{ role: 'user', parts: [{ text: args.prompt }] }],
                         generationConfig: { responseModalities: ['IMAGE', 'TEXT'] } as any

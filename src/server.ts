@@ -1311,6 +1311,47 @@ app.post("/campaign/start", checkSubscription, checkApiQuota, async (req, res) =
  * POST http://localhost:3000/admin/chat
  * Body: { "query": "How many messages sent?", "sessionId": "my-user-1" }
  */
+// ─── Admin Settings Endpoints ───────────────────────────────────────────────
+app.get("/admin/settings/ai-config", async (req, res) => {
+  try {
+    const { getFirestore } = await import('firebase-admin/firestore');
+    const db = getFirestore();
+    const doc = await db.collection('system_settings').doc('ai_config').get();
+    res.json(doc.exists ? doc.data() : { currentModel: 'gemini-2.0-flash' });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch AI config" });
+  }
+});
+
+app.post("/admin/settings/ai-config", async (req, res) => {
+  const { currentModel } = req.body;
+  if (!currentModel) return res.status(400).json({ error: "Model name required" });
+
+  try {
+    const { getFirestore } = await import('firebase-admin/firestore');
+    const db = getFirestore();
+    await db.collection('system_settings').doc('ai_config').set({ currentModel, updatedAt: Date.now() });
+    res.json({ success: true, message: `Global AI model updated to ${currentModel}` });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to update AI config" });
+  }
+});
+
+app.get("/admin/stats/usage", async (req, res) => {
+  try {
+    const { getFirestore } = await import('firebase-admin/firestore');
+    const db = getFirestore();
+    const snap = await db.collection('usage_stats').get();
+    const stats: Record<string, any> = {};
+    snap.forEach(doc => {
+      stats[doc.id] = doc.data();
+    });
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch usage stats" });
+  }
+});
+
 app.post("/admin/chat", upload.single('file'), async (req: any, res) => {
   const query = req.body?.query || '';
 
