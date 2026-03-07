@@ -17,7 +17,8 @@ import {
     PanelLeftOpen,
     RefreshCcw,
     UserCircle,
-    Briefcase
+    Briefcase,
+    Sparkles
 } from "lucide-react";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
@@ -43,6 +44,7 @@ export default function OwnerSidebar() {
         { name: "Announcements", href: "/owner/announcements", icon: Bell },
         { name: "Support Tickets", href: "/owner/support", icon: Ticket },
         { name: "Activity Logs", href: "/owner/logs", icon: ClipboardList },
+        { name: "Assistant", href: "/owner/assistant", icon: Sparkles },
         { name: "Settings", href: "/owner/settings", icon: Settings },
     ];
 

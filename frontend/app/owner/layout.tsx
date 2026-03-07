@@ -65,14 +65,17 @@ export default function OwnerLayout({
 }: {
     children: React.ReactNode;
 }) {
+    const pathname = usePathname();
+    const isAssistant = pathname === '/owner/assistant';
+
     return (
         <OwnerGuard>
             <div className="flex h-screen overflow-x-visible bg-slate-50 text-slate-900 font-manrope relative">
                 <OwnerSidebar />
                 <div className="flex flex-col flex-1 min-w-0 h-full overflow-hidden">
-                    <OwnerHeader />
-                    <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 pb-32 md:pb-8">
-                        <div className="max-w-7xl mx-auto">
+                    {!isAssistant && <OwnerHeader />}
+                    <main className={isAssistant ? "flex-1 overflow-hidden" : "flex-1 overflow-y-auto p-4 md:p-6 lg:p-8 pb-32 md:pb-8"}>
+                        <div className={isAssistant ? "h-full w-full" : "max-w-7xl mx-auto"}>
                             {children}
                         </div>
                     </main>

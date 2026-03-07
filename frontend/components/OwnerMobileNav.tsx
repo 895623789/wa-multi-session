@@ -13,7 +13,8 @@ import {
     Settings,
     ClipboardList,
     RefreshCcw,
-    Briefcase
+    Briefcase,
+    Sparkles
 } from "lucide-react";
 
 function cn(...classes: (string | boolean | undefined)[]) {
@@ -33,6 +34,7 @@ export default function OwnerMobileNav() {
         { name: "News", href: "/owner/announcements", icon: Bell },
         { name: "Support", href: "/owner/support", icon: Ticket },
         { name: "Logs", href: "/owner/logs", icon: ClipboardList },
+        { name: "AI", href: "/owner/assistant", icon: Sparkles },
         { name: "Settings", href: "/owner/settings", icon: Settings },
         { name: "Business", href: "/dashboard", icon: RefreshCcw, isSpecial: true },
     ];
