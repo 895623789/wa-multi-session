@@ -60,7 +60,7 @@ const tools: FunctionDeclaration[] = [
     },
     {
         name: 'setBotStatus',
-        description: 'Turn a specific bot ON or OFF to temporarily pause or resume its auto-replies.',
+        description: 'Turn a specific bot ON or OFF. ⚠️ SAFETY RULE: You MUST ask the user for confirmation (e.g., "Boss, are you sure you want to turn OFF [Bot Name]?") before executing this.',
         parameters: {
             type: SchemaType.OBJECT,
             properties: {
@@ -161,7 +161,7 @@ YOUR CAPABILITIES:
 3. PDF: Read and summarize document contents.
 4. SEND WHATSAPP: Send messages on behalf of the owner. **CRITICAL**: Before calling 'sendWhatsappMessage', ensure you have: (A) The numbers, (B) The message, and (C) The specific bot to use. If any of these are missing, DO NOT call the tool; instead, ASK the user for the missing details.
 5. GENERATE IMAGES: Use 'generateImage' for image creation requests.
-6. BOT CONTROL: Turn bots ON or OFF using 'setBotStatus'.
+6. BOT CONTROL: Turn bots ON or OFF using 'setBotStatus'. **SAFETY**: Always ask "Boss, are you sure you want to turn [ON/OFF] [Bot Name]?" before calling this tool.
 7. HISTORY INSPECTION: Read a customer's recent chats using 'getChatHistory' to see if they are interested or what they asked.
 8. AUTOMATION: Use 'scheduleTask' to schedule follow-up messages or internal reminders.
 

@@ -749,6 +749,27 @@ Please summarize this for me and suggest a reply based on our business profile a
             console.error("Failed to schedule task:", err);
           }
         }
+
+        if (call.name === 'set_bot_status') {
+          const { sessionId, isActive } = call.args as { sessionId: string, isActive: boolean };
+          console.log(`⚡ [${msg.sessionId}] AI Action: Setting bot status for [${sessionId}] to ${isActive ? 'ON' : 'OFF'}`);
+
+          try {
+            await (whatsapp as any).adapter.writeData(sessionId, 'isActive', 'config', isActive ? 'true' : 'false');
+            await whatsapp.sendText({
+              sessionId: msg.sessionId,
+              to: remoteJid,
+              text: `✅ *System Update:* Bot *${sessionId}* has been turned *${isActive ? 'ON' : 'OFF'}* as requested, Boss.`
+            });
+          } catch (err) {
+            console.error("Failed to update bot status via AI:", err);
+            await whatsapp.sendText({
+              sessionId: msg.sessionId,
+              to: remoteJid,
+              text: `❌ Boss, I tried to update the status for *${sessionId}* but something went wrong.`
+            });
+          }
+        }
       }
     }
 

@@ -204,6 +204,24 @@ const tools = [
                     },
                     required: ["type", "time"]
                 }
+            },
+            {
+                name: "set_bot_status",
+                description: "Turns a specific bot ON or OFF. ⚠️ SAFETY RULE: Before using this, you MUST ask the Boss for confirmation like: 'Boss, are you sure you want to turn [ON/OFF] the bot [Name/ID]?' Only execute AFTER they say yes.",
+                parameters: {
+                    type: SchemaType.OBJECT,
+                    properties: {
+                        sessionId: {
+                            type: SchemaType.STRING,
+                            description: "The session ID of the bot to control (e.g., 'user123_uuid')."
+                        },
+                        isActive: {
+                            type: SchemaType.BOOLEAN,
+                            description: "True to turn ON (resume), False to turn OFF (pause)."
+                        }
+                    },
+                    required: ["sessionId", "isActive"]
+                }
             }
         ]
     }
@@ -278,7 +296,8 @@ ${customInstructions ? customInstructions : "No custom instructions. Focus stric
 2. **OCR & Extraction**: If the Boss sends a PDF or Image, extract all phone numbers. If a 10-digit number like "9988776655" is found, automatically format it as "919988776655" (Indian standard) if no code is present.
 3. **Scheduling**: You can schedule reminders for the Boss or messages for contacts. confirm the EXACT time you calculated to the Boss. You can also schedule recurring tasks (daily/weekly).
 4. **Repeating Tasks**: For "Daily at 8 AM", calculate the next occurrence's ISO time and set 'repeat: daily'.
-5. **Image Gen**: You can generate images for marketing or just for fun. Use the generate_image tool.
+5. **Bot Control Safety**: BEFORE turning any bot ON or OFF using 'set_bot_status', you MUST explicitly ask: "Boss, are you sure you want to turn [ON/OFF] the bot [ID]?" and wait for their confirmation. Never skip this step.
+6. **Image Gen**: You can generate images for marketing or just for fun. Use the generate_image tool.
 
 --- INTERCEPTION & PROACTIVE SUPPORT ---
 - If you are being asked to "Review" or "Suggest a Reply" for an intercepted message from a stranger:
